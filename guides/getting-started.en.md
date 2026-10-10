@@ -8,7 +8,7 @@ Cyberzavod gives the AI coding agent you already use a fixed development process
 
 ## What you need
 
-- Node 22 or newer, git and [Claude Code](https://claude.com/claude-code).
+- Node 22 or newer, git and an AI coding agent: [Claude Code](https://claude.com/claude-code) or [Codex CLI](https://github.com/openai/codex).
 - A git repository. In an empty folder, run `git init` first.
 
 ## Five steps
@@ -25,15 +25,17 @@ Cyberzavod gives the AI coding agent you already use a fixed development process
    npx cyberzavod init
    ```
 
-   Commit the files it lists.
+   For Codex CLI, run `npx cyberzavod init --agent codex`. Commit the files it lists.
 
-3. Open Claude Code in the project.
-4. Run `/setup`. It fills in `AGENTS.md` from your code and runs the project checks once. Commit what it changed.
+3. Open Claude Code (or Codex) in the project.
+4. Run `/setup` (in Codex, `$setup`). It fills in `AGENTS.md` from your code and runs the project checks once. Commit what it changed.
 5. Give it a task:
 
    ```text
    /feature "Add dark mode"
    ```
+
+   In Codex, skills start with `$`: `$feature "Add dark mode"`.
 
 Done. The task goes through the workflow:
 
@@ -44,7 +46,7 @@ You approve the plan. Agents write the code, review it and verify it against the
 ## Good to know
 
 - **Local-first.** Cyberzavod is local-first. Nothing is shared unless you explicitly use sharing or publishing (`/publish-recording`, `share`). `init`, `sync`, `status`, `doctor` and the hooks send nothing anywhere.
-- **Claude Code first.** Cyberzavod is agent-agnostic by design. Claude Code is currently the first fully supported adapter; other agents are not supported yet.
+- **Two agents.** Cyberzavod is agent-agnostic by design. Claude Code (the default) and Codex CLI (`init --agent codex`) are supported; other agents are not supported yet. A project is driven by one agent. Codex runs a project's hooks only for a project you trust, so `init` marks the project and its hooks trusted in your own Codex config, outside the project; `disconnect` takes that back.
 - **Your files are safe.** Cyberzavod never silently overwrites a file it does not own. Running `init` again changes nothing.
 - **Something is wrong?** Run `npx cyberzavod doctor`. It checks the setup and says how to fix each problem.
 - **Not for you?** `npx cyberzavod disconnect` shows what it will remove and what it will keep, then removes only what Cyberzavod added. Your code, `AGENTS.md` and the journal stay.

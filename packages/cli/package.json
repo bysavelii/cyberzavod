@@ -1,7 +1,7 @@
 {
   "name": "cyberzavod",
-  "version": "0.9.1",
-  "description": "Local-first development harness for AI coding agents: process, checks and a session journal in your repository. Agent-agnostic by design; Claude Code is the first supported adapter.",
+  "version": "0.10.0",
+  "description": "Local-first development harness for AI coding agents: process, checks and a session journal in your repository. Agent-agnostic by design; Claude Code and Codex CLI are supported.",
   "license": "MIT",
   "author": {
     "name": "bysavelii",
@@ -11,6 +11,7 @@
     "ai",
     "agents",
     "claude-code",
+    "codex",
     "harness",
     "workflow"
   ],

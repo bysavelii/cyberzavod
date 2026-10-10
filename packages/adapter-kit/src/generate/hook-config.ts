@@ -105,8 +105,11 @@ export function stopFailureCommand(): string {
 // The npx flags between `npx` and the package may change in later versions: hooks of earlier
 // versions are recognized by the package and hook name, not by the full command prefix. This is the
 // one place that knows the shape `npx … cyberzavod@<version> hook <name> …` that `hookCommand`
-// writes.
-const NPX_HANDLER_PATTERN = new RegExp(`^npx\\s.*\\s${PACKAGE_NAME}@(\\S+) hook ([\\w-]*)`);
+// writes, bare or wrapped by `inPosixShell`.
+const POSIX_SHELL_PREFIX = "sh -c '";
+const NPX_HANDLER_PATTERN = new RegExp(
+  `^(?:${POSIX_SHELL_PREFIX})?npx\\s.*\\s${PACKAGE_NAME}@(\\S+) hook ([\\w-]*)`,
+);
 
 /** What an own handler's command says: the package version it runs and the hook it calls. */
 interface OwnCommand {
@@ -175,6 +178,18 @@ export function hookCommand(source: HookCommandSource): string {
   const flag = agentFlag === undefined ? "" : ` ${agentFlag}`;
 
   return `${runner} ${PACKAGE_NAME}@${version} hook ${hook}${flag} || ${onFailure}`;
+}
+
+/**
+ * Wraps a command so that it runs as POSIX shell whatever the login shell is: an agent that runs
+ * a hook as `$SHELL -lc <command>` would hand `$(…)` and `||` to fish before 3.4 or to tcsh, which
+ * do not understand them. The command goes into single quotes; a quote inside it is closed,
+ * escaped and opened again, which fish, tcsh and POSIX shells read alike.
+ * @param {string} command POSIX shell command.
+ * @returns {string} A command that starts `sh` with it.
+ */
+export function inPosixShell(command: string): string {
+  return `${POSIX_SHELL_PREFIX}${command.replaceAll("'", "'\\''")}'`;
 }
 
 function isHookGroup(value: unknown): value is HookGroup {

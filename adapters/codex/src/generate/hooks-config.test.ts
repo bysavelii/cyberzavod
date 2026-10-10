@@ -16,11 +16,21 @@ describe("codexHooks", () => {
     expect(commands[1]).toContain(`cyberzavod@${VERSION} hook turn-start --agent codex ||`);
   });
 
-  it("ищет пакет от текущего каталога, потому что Codex не даёт переменную проекта", () => {
+  it("ищет пакет от корня проекта, а не от каталога сессии: сессия может идти в подкаталоге", () => {
     const [command] = commandsOf("SessionStart");
 
-    expect(command).toContain("--prefix . ");
+    expect(command).toContain('--prefix "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" ');
+    expect(command).not.toContain("--prefix . ");
     expect(command).not.toContain("CLAUDE_PROJECT_DIR");
+  });
+
+  it("запускает каждую команду через sh -c: логин-оболочка не обязана понимать $(…) и ||", () => {
+    const hooks = codexHooks(VERSION);
+
+    const commands = Object.keys(hooks).flatMap((event) => commandsOf(event, hooks));
+
+    expect(commands.every((command) => command.startsWith("sh -c 'npx "))).toBe(true);
+    expect(commands.every((command) => command.endsWith("'"))).toBe(true);
   });
 
   it("запись остановки синхронная, остальные записи асинхронные", () => {

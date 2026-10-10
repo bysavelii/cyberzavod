@@ -180,6 +180,65 @@ describe("rolloutAssignments", () => {
     });
   });
 
+  describe("инструменты collaboration: результат вызова — только путь задачи", () => {
+    const SPAWN_ARGUMENTS =
+      '{"task_name": "review_change", "message": "review it", "agent_type": "reviewer"}';
+
+    function collaborationRollout(followup: string): string {
+      return rolloutOf([
+        line("2026-10-10T08:00:00.000Z", "response_item", {
+          type: "function_call",
+          namespace: "collaboration",
+          name: "spawn_agent",
+          arguments: SPAWN_ARGUMENTS,
+          call_id: "c1",
+        }),
+        line("2026-10-10T08:00:00.100Z", "event_msg", {
+          type: "item_completed",
+          item: {
+            type: "SubAgentActivity",
+            id: "c1",
+            kind: "started",
+            agent_thread_id: "thread-1",
+            agent_path: "/root/review_change",
+          },
+        }),
+        line("2026-10-10T08:00:00.200Z", "response_item", {
+          type: "function_call_output",
+          call_id: "c1",
+          output: '{"task_name": "/root/review_change"}',
+        }),
+        line("2026-10-10T08:00:05.000Z", "response_item", {
+          type: "function_call",
+          namespace: "collaboration",
+          name: "followup_task",
+          arguments: followup,
+          call_id: "c2",
+        }),
+      ]);
+    }
+
+    it("берёт id запущенного агента из начала его работы по id вызова", () => {
+      const [spawned] = rolloutAssignments(collaborationRollout("{}"));
+
+      expect(spawned).toMatchObject({ via: "spawn", agentType: "reviewer", agentId: "thread-1" });
+    });
+
+    it("называет получателя нового задания по пути задачи, полному и короткому", () => {
+      const full = '{"target": "/root/review_change", "message": "again"}';
+      const short = '{"target": "review_change", "message": "again"}';
+
+      const targets = [full, short].map((followup) =>
+        rolloutAssignments(collaborationRollout(followup)).at(-1),
+      );
+
+      expect(targets).toEqual([
+        expect.objectContaining({ via: "message", agentId: "thread-1" }),
+        expect.objectContaining({ via: "message", agentId: "thread-1" }),
+      ]);
+    });
+  });
+
   it("пропускает прочие вызовы и мусорные строки", () => {
     expect(rolloutAssignments(abortedReviewerRollout())).toEqual([]);
     expect(rolloutAssignments(GARBAGE)).toEqual([]);

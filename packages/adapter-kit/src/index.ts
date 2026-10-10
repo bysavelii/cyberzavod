@@ -128,6 +128,7 @@ export {
   hookCommand,
   hookNameOf,
   groupsOf,
+  inPosixShell,
   inspectHooks,
   isOwnHandler,
   mergedHooks,

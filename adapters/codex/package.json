@@ -6,7 +6,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "check": "tsc -p . && vitest run"
+    "check": "tsc -p . && vitest run",
+    "e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "@cyberzavod/adapter-kit": "workspace:*",

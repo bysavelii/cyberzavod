@@ -27,7 +27,13 @@ const PARAGRAPH_SEPARATOR = "\n\n";
 const ASSISTANT_ROLE = "assistant";
 const TEXT_PART = "output_text";
 const SPAWN_TOOL = "spawn_agent";
-const SEND_TOOL = "send_input";
+// The tools that give a task to an agent that already runs: `send_input` of the first multi-agent
+// tools and `followup_task` of the collaboration tools.
+const SEND_TOOLS: ReadonlySet<string> = new Set(["send_input", "followup_task"]);
+// The collaboration tools name an agent by its task path; the root session's tasks are under it.
+const ROOT_TASK_PATH = "/root";
+const ACTIVITY_ITEM = "SubAgentActivity";
+const STARTED_KIND = "started";
 // How the tools that run a command report the exit code in the header of their output, before the
 // line that starts the command's own output.
 const EXIT_CODE_LINE = /^(?:Process exited with code|Exit code:) (-?\d+)\s*$/m;
@@ -234,7 +240,8 @@ function outputsByCall(lines: readonly RolloutLine[]): Map<string, string> {
   return outputs;
 }
 
-// The id of a spawned agent is in the result of the `spawn_agent` call.
+// The id of a spawned agent is in the result of the `spawn_agent` call of the first multi-agent
+// tools.
 function spawnedAgentId(output: string | undefined): string | undefined {
   if (output === undefined) return undefined;
 
@@ -248,15 +255,61 @@ function spawnedAgentId(output: string | undefined): string | undefined {
   }
 }
 
+// The collaboration tools answer `spawn_agent` with the task path only; the thread of the new agent
+// is named by the `SubAgentActivity` item that Codex writes when the agent starts, with the id of
+// the call.
+interface StartedAgents {
+  /** Thread id of the agent a `spawn_agent` call started, by the call's id. */
+  byCall: Map<string, string>;
+  /** Thread id by the agent's task path. */
+  byPath: Map<string, string>;
+}
+
+function startedAgentsOf(lines: readonly RolloutLine[]): StartedAgents {
+  const started: StartedAgents = { byCall: new Map(), byPath: new Map() };
+
+  for (const { type, payload } of lines) {
+    const item = type === "event_msg" && isObject(payload.item) ? payload.item : undefined;
+
+    if (item?.type !== ACTIVITY_ITEM || item.kind !== STARTED_KIND) continue;
+
+    const { id, agent_thread_id: threadId, agent_path: agentPath } = item;
+
+    if (typeof threadId !== "string") continue;
+    if (typeof id === "string") started.byCall.set(id, threadId);
+    if (typeof agentPath === "string") started.byPath.set(agentPath, threadId);
+  }
+
+  return started;
+}
+
+function spawnedAgentOf(
+  callId: unknown,
+  outputs: ReadonlyMap<string, string>,
+  started: StartedAgents,
+): string | undefined {
+  if (typeof callId !== "string") return undefined;
+
+  return started.byCall.get(callId) ?? spawnedAgentId(outputs.get(callId));
+}
+
+// A target is a thread id, a task path or the name of a task under the root.
+function targetThreadOf(target: string, started: StartedAgents): string {
+  const path = target.startsWith("/") ? target : `${ROOT_TASK_PATH}/${target}`;
+
+  return started.byPath.get(path) ?? target;
+}
+
 function assignmentOf(
   line: RolloutLine,
   outputs: ReadonlyMap<string, string>,
+  started: StartedAgents,
 ): AgentAssignment | null {
   const { payload, ts } = line;
   const { name, call_id: callId } = payload;
 
   if (line.type !== "response_item" || payload.type !== "function_call") return null;
-  if (name !== SPAWN_TOOL && name !== SEND_TOOL) return null;
+  if (typeof name !== "string") return null;
 
   const args = argumentsOf(payload);
   const { message } = args;
@@ -264,7 +317,7 @@ function assignmentOf(
   if (typeof message !== "string") return null;
 
   if (name === SPAWN_TOOL && typeof args.agent_type === "string") {
-    const agentId = spawnedAgentId(typeof callId === "string" ? outputs.get(callId) : undefined);
+    const agentId = spawnedAgentOf(callId, outputs, started);
 
     return {
       ts,
@@ -275,26 +328,27 @@ function assignmentOf(
     };
   }
 
-  if (name === SEND_TOOL && typeof args.target === "string") {
-    return { ts, text: message, via: "message", agentId: args.target };
+  if (SEND_TOOLS.has(name) && typeof args.target === "string") {
+    return { ts, text: message, via: "message", agentId: targetThreadOf(args.target, started) };
   }
 
   return null;
 }
 
 /**
- * Finds tasks the session gave to subagents: `spawn_agent` and `send_input` calls, in any tool
- * namespace.
+ * Finds tasks the session gave to subagents: `spawn_agent`, `send_input` and `followup_task`
+ * calls, in any tool namespace.
  * @param {string} rollout Session rollout contents in JSONL format.
  * @returns {AgentAssignment[]} Tasks from earliest to latest; a task for a new run has `agentId`
- *   if the call result was found in the rollout.
+ *   if the call result or the start of the agent was found in the rollout.
  */
 export function rolloutAssignments(rollout: string): AgentAssignment[] {
   const lines = linesOf(rollout);
   const outputs = outputsByCall(lines);
+  const started = startedAgentsOf(lines);
 
   return lines
-    .map((line) => assignmentOf(line, outputs))
+    .map((line) => assignmentOf(line, outputs, started))
     .filter((assignment) => assignment !== null)
     .sort((a, b) => a.ts - b.ts);
 }

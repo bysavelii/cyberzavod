@@ -2,7 +2,7 @@
 
 # How to work in this project
 
-The development process is run by Cyberzavod (harness 0.9.1, workflow `default`): Plan → Code → Review → Verify → Record. `/feature <task>` takes a task through the whole workflow; stage roles are agents in `.claude/agents/`.
+The development process is run by Cyberzavod (harness 0.10.0, workflow `default`): Plan → Code → Review → Verify → Record. `/feature <task>` takes a task through the whole workflow; stage roles are agents in `.claude/agents/`.
 
 Project checks (`verification.commands` in `.cyberzavod/project.json`) must pass before a commit:
 

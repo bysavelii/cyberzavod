@@ -8,7 +8,7 @@ Cyberzavod is a local-first development harness for AI coding agents: it gives t
 
 ## Start in 3 minutes
 
-You need Node 22+, git and [Claude Code](https://claude.com/claude-code), in a git repository.
+You need Node 22+, git and an AI coding agent: [Claude Code](https://claude.com/claude-code) or [Codex CLI](https://github.com/openai/codex), in a git repository.
 
 ```bash
 cd my-project
@@ -22,7 +22,16 @@ Then open Claude Code in the project and run:
 /feature "Add dark mode"   # one task through the whole workflow
 ```
 
-Commit what `init` and `/setup` list. Optionally, `/publish-recording` turns the session into a recording and, only with your consent, shares it to your gallery on the site.
+With Codex CLI, connect the project with `npx cyberzavod init --agent codex` and open Codex in it. Codex skills are called with `$` instead of `/`:
+
+```text
+$setup
+$feature "Add dark mode"
+```
+
+Commit what `init` and `/setup` (`$setup`) list. Optionally, `/publish-recording` (`$publish-recording`) turns the session into a recording and, only with your consent, shares it to your gallery on the site.
+
+A project is driven by one agent. To switch, run `npx cyberzavod disconnect`, then `init --agent <agent>`.
 
 Guides: [Cyberzavod in 3 minutes](https://cyberzavod.com/guides/getting-started/) · [full guide](https://cyberzavod.com/guides/connect-project/) (sources: [guides/](guides/), English and Russian).
 
@@ -32,7 +41,9 @@ Guides: [Cyberzavod in 3 minutes](https://cyberzavod.com/guides/getting-started/
 
 ## Current support
 
-Cyberzavod is agent-agnostic by design. Claude Code is currently the first fully supported adapter; other agents are not supported yet. The CLI is built for macOS, Linux and Windows, and CI checks the packed npm package on all three (on Windows, Claude Code runs the hooks through Git Bash).
+Cyberzavod is agent-agnostic by design. Two adapters are supported: Claude Code (the default) and Codex CLI (`init --agent codex`). Other agents are not supported yet. The CLI is built for macOS, Linux and Windows, and CI checks the packed npm package on all three (on Windows, Claude Code runs the hooks through Git Bash). The Codex hook commands are POSIX shell commands, so on Windows run Codex in WSL; the Codex hooks on native Windows are not verified.
+
+Codex runs a project's hooks and roles only for a project you trust, and only with hooks you have approved. `init` asks one confirmation and then marks the project trusted and its hooks approved in your own Codex config (`$CODEX_HOME/config.toml`, by default `~/.codex/config.toml`); `sync` carries the approval over to the updated hooks, and `disconnect` takes back only what `init` added. The trust is never written into the project.
 
 ## Privacy
 
@@ -46,9 +57,23 @@ Cyberzavod is local-first. Nothing is shared unless you explicitly use sharing o
 
 - `.cyberzavod/project.json`: the project marker and config: project id, process, agent per stage, checks and the journal path. The journal is the `.cyberzavod/journal/` directory with sessions, decisions and notes as JSON files.
 - `AGENTS.md`: your project rules for agents and people. An existing hand-written `CLAUDE.md` is moved here; otherwise a starter is added for `/setup` to fill in.
+
+For Claude Code:
+
 - `CLAUDE.md`: a thin entry point for Claude Code, generated: don't edit it by hand.
 - `.claude/agents/` and `.claude/skills/`: the stage agents, the recording editor, and the `/setup`, `/feature` and `/publish-recording` skills.
 - `.claude/settings.json`: the recording and stop hooks and a rule that forbids reading and editing `.env`. Your own settings and hooks in this file stay as they are.
+
+For Codex CLI (`init --agent codex`; Codex reads `AGENTS.md` itself, so there is no `CLAUDE.md`):
+
+- `.codex/config.toml`: the workflow rules for the agent and a raised `AGENTS.md` size limit, so Codex does not silently cut your rules.
+- `.codex/agents/`: a role per stage and the recording editor.
+- `.agents/skills/`: the `$setup`, `$feature` and `$publish-recording` skills.
+- `.codex/hooks.json`: the recording and stop hooks and a guard that refuses `.env` and raw session logs. Your own hooks in this file stay as they are.
+- In your own Codex config, outside the project: the trust for the project and its hooks (see Current support).
+
+Both:
+
 - `.cyberzavod/generated.json`: the generated files with their checksums, so Cyberzavod can tell its own file from one you edited.
 - A `.gitignore` line for the journal's `capture/` directory.
 
@@ -60,7 +85,7 @@ Run every command as `npx cyberzavod <command>`.
 
 | Section | Command | What it does |
 |---|---|---|
-| Getting started | `init` | Set up the project: config, `AGENTS.md`, agent files |
+| Getting started | `init` | Set up the project: config, `AGENTS.md`, agent files; `--agent claude\|codex` picks the agent (default `claude`) |
 | Getting started | `status` | Project, workflow, stage agents, checks and the journal |
 | Journal | `decision` | Record a decision in the journal |
 | Journal | `note` | Record a note in the journal |
@@ -87,7 +112,8 @@ Run `npx cyberzavod doctor`. It prints a line for each item (✓ fine, – note,
 
 `doctor` only looks for the check commands; `npx cyberzavod doctor --run-checks` runs them too. `doctor` does not catch these cases:
 
-- Claude Code was open before `init`: the session has no start in the journal. Start a new session.
+- The agent was open before `init`: the session has no start in the journal. Start a new session.
+- Codex ignores the roles and hooks: the project or its hooks are not trusted in your Codex config. `doctor` reports it with the fix: open Codex in the project and trust it (or add `trust_level = "trusted"` for the project to your Codex config), and approve the hooks with `/hooks`.
 - The stop hook won't let the agent finish: the checks are red, fix what they print.
 - No network and no package in the npm cache: the recording hooks are skipped, and the stop hook lets the agent finish with a message that the checks were skipped.
 
@@ -133,7 +159,9 @@ The record format is the whole contract between the tool and any viewer. [cyberz
 | `packages/player` | The factory-floor player: script and frame of a session record; used only by the site |
 | `packages/storage` | Disk: project config, the directory record store, harness loading |
 | `packages/cli` | The `cyberzavod` npm package: the CLI, bundled with everything below into one file |
+| `packages/adapter-kit` | What every agent adapter shares: file ownership, hook file, recording hooks, draft and publish |
 | `adapters/claude` | The Claude Code adapter: file generator, hooks, session capture |
+| `adapters/codex` | The Codex CLI adapter: file generator, trust in the user's Codex config, hooks, rollout parsing; has an end-to-end test against a real `codex exec` |
 | `.cyberzavod/` | This repository's own connection: config and journal; `.cyberzavod/journal/sessions/` holds the recordings the site shows: builds of the example projects |
 | `projects/` | Cards of the projects whose recordings the site shows: name, description, links, stack |
 | `apps/web` | The site: Astro, SolidJS, PixiJS factory floor |
@@ -141,7 +169,7 @@ The record format is the whole contract between the tool and any viewer. [cyberz
 
 The tool and the site share this repository but not code: the site only reads the record format. Releases go to npm when a `vX.Y.Z` tag is pushed; the steps are in [RELEASING.md](RELEASING.md).
 
-To work on Cyberzavod itself: `pnpm install`, then `pnpm cyberzavod <command>` builds the CLI from source and runs it. `make dev` starts the site on http://localhost:4321 and the API, `make check` runs every check, `pnpm smoke` checks the real npm package from `init` to `disconnect`, and `make help` lists the rest. The project rules are in [AGENTS.md](AGENTS.md). There is an isolated dev container for AI agents; see [.devcontainer/README.md](.devcontainer/README.md).
+To work on Cyberzavod itself: `pnpm install`, then `pnpm cyberzavod <command>` builds the CLI from source and runs it. `make dev` starts the site on http://localhost:4321 and the API, `make check` runs every check, `pnpm smoke` checks the real npm package from `init` to `disconnect` for both agents, `make check-codex` runs the Codex end-to-end test, and `make help` lists the rest. The project rules are in [AGENTS.md](AGENTS.md). There is an isolated dev container for AI agents; see [.devcontainer/README.md](.devcontainer/README.md).
 
 ## License
 

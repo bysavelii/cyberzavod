@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook record || true",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook record || true",
             "async": true
           }
         ]
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook record || true",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook record || true",
             "async": true
           }
         ]
@@ -63,12 +63,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook record || true",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook record || true",
             "async": true
           },
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook turn-start || true",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook turn-start || true",
             "timeout": 30
           }
         ]
@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook record || true",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook record || true",
             "async": true
           }
         ]
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook record || true",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook record || true",
             "async": true
           }
         ]
@@ -101,7 +101,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook record || true",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook record || true",
             "async": true
           }
         ]
@@ -112,12 +112,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook record || true",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook record || true",
             "async": true
           },
           {
             "type": "command",
-            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.9.1 hook stop || echo '{\"systemMessage\":\"Cyberzavod: the stop hook failed or could not start (for example, npx without network). Project checks were skipped.\"}'",
+            "command": "npx -y --prefer-offline --fetch-retries=0 --prefix \"$CLAUDE_PROJECT_DIR\" cyberzavod@0.10.0 hook stop || echo '{\"systemMessage\":\"Cyberzavod: the stop hook failed or could not start (for example, npx without network). Project checks were skipped.\"}'",
             "timeout": 180,
             "statusMessage": "Running project checks…"
           }

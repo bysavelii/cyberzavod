@@ -1167,17 +1167,19 @@ export function directoriesOutsideProjects(
 }
 
 /**
- * Finds subagent run transcripts: the tokens of each run are counted from them.
+ * Finds subagent run transcripts: the tokens of each run are counted from them. The path comes
+ * from the stop and, for agents that give it at the start, from the start: a run cut off before it
+ * stopped keeps its tokens.
  * @param {RawEvent[]} events Log events.
- * @returns {Map<string, string>} Transcript path by run `agentId`; for a run that
- *   stopped more than once, the last one.
+ * @returns {Map<string, string>} Transcript path by run `agentId`; for a run with several events,
+ *   the last one.
  */
 export function runTranscriptPaths(events: RawEvent[]): Map<string, string> {
   const paths = new Map<string, string>();
 
   for (const event of events) {
     if (
-      event.kind === "subagent_stop" &&
+      (event.kind === "subagent_start" || event.kind === "subagent_stop") &&
       event.agentId !== undefined &&
       event.transcriptPath !== undefined
     ) {
@@ -1207,9 +1209,10 @@ export function sessionTranscriptPath(events: RawEvent[]): string | undefined {
 }
 
 /**
- * Finds the /feature pipeline station transcripts: reports come from them.
+ * Finds the /feature pipeline station transcripts: reports come from them. A station that started
+ * and was cut off before it stopped is included when its start gave the path.
  * @param {RawEvent[]} events Log events.
- * @returns {string[]} Paths to transcripts of stopped stations without repeats; service
+ * @returns {string[]} Paths to transcripts of started or stopped stations without repeats; service
  *   subagents that are not among the stations are left out.
  */
 export function stationTranscriptPaths(events: RawEvent[]): string[] {
@@ -1217,7 +1220,7 @@ export function stationTranscriptPaths(events: RawEvent[]): string[] {
 
   for (const event of events) {
     if (
-      event.kind === "subagent_stop" &&
+      (event.kind === "subagent_start" || event.kind === "subagent_stop") &&
       event.transcriptPath !== undefined &&
       stageOfAgent(event.agent) !== undefined
     ) {

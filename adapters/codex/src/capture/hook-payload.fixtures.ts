@@ -10,7 +10,9 @@ export const SESSION_ID = "01a124f1-d884-7072-a626-35f8ef505c9e";
 export const SUBAGENT_ID = "01a124f1-d983-78f0-b760-8adafc439b0c";
 
 const SESSION_ROLLOUT = `/codex-home/sessions/2026/10/10/rollout-2026-10-10T08-33-11-${SESSION_ID}.jsonl`;
-const SUBAGENT_ROLLOUT = `/codex-home/sessions/2026/10/10/rollout-2026-10-10T08-33-12-${SUBAGENT_ID}.jsonl`;
+
+/** Rollout of the subagent of the live run. */
+export const SUBAGENT_ROLLOUT = `/codex-home/sessions/2026/10/10/rollout-2026-10-10T08-33-12-${SUBAGENT_ID}.jsonl`;
 const TURN_ID = "01a124f1-d8b2-7b81-9836-214836be2e83";
 const SUBAGENT_TURN_ID = "01a124f1-d9b7-7341-bac0-66e50410e105";
 

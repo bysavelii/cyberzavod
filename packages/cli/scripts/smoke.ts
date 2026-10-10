@@ -1,7 +1,9 @@
 // Smoke check of the real npm package: `npm pack`, installing the archive into a temporary
 // directory, and the human's path in a clean project: init, status, doctor, sync --check, repeated
 // init, the capture hook, a decision in the journal, disconnect. After disconnect the human's code
-// and files are in place, Cyberzavod files are removed, the journal stays. Runs on Linux, macOS
+// and files are in place, Cyberzavod files are removed, the journal stays. The path runs twice, for
+// each agent the package supports: Claude Code, and Codex, which adds the trust in the human's
+// Codex config, a session that starts in a subdirectory and the `.env` guard. Runs on Linux, macOS
 // and Windows: Node API only, no shell, except the npm call, which on Windows is `npm.cmd`.
 
 import assert from "node:assert/strict";
@@ -15,6 +17,7 @@ const PACKAGE = path.resolve(import.meta.dirname, "..");
 const IS_WINDOWS = process.platform === "win32";
 // A space in the project path catches commands that join a path into a string without quotes.
 const PROJECT_NAME = "smoke project";
+const CODEX_PROJECT_NAME = "smoke codex project";
 const PUBLISHED_FILES = [
   "LICENSE",
   "README.md",
@@ -71,6 +74,8 @@ interface Workspace {
   tool: string;
   project: string;
   cli: string;
+  /** Environment of every command in the project, for example the Codex home of the run. */
+  env: Readonly<Record<string, string>>;
 }
 
 function step(title: string): void {
@@ -105,7 +110,7 @@ function cyberzavod(
     cwd: workspace.project,
     encoding: "utf8",
     input: options.input,
-    env: childEnvironment(options.env ?? {}),
+    env: childEnvironment({ ...workspace.env, ...options.env }),
   });
 
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
@@ -169,14 +174,11 @@ async function writeFiles(root: string, files: Readonly<Record<string, string>>)
   }
 }
 
-async function createProject(project: string): Promise<void> {
-  const settings = `${JSON.stringify(USER_SETTINGS, null, 2)}\n`;
-
-  await writeFiles(project, {
-    ...SOURCE_FILES,
-    ".gitignore": USER_GITIGNORE,
-    ".claude/settings.json": settings,
-  });
+async function createProject(
+  project: string,
+  agentFiles: Readonly<Record<string, string>>,
+): Promise<void> {
+  await writeFiles(project, { ...SOURCE_FILES, ".gitignore": USER_GITIGNORE, ...agentFiles });
 
   const git = spawnSync("git", ["init", "-q"], { cwd: project, encoding: "utf8" });
 
@@ -234,10 +236,9 @@ function checkStatus(workspace: Workspace): void {
   step("status, status --json");
 }
 
-// The doctor exit code is not checked here: the AGENTS.md starter waits for /setup, and the CI
-// machine has no Claude Code. What matters is that the project, hooks and agent files are fine and
-// the JSON parses.
-function checkDoctor(workspace: Workspace): void {
+// The doctor exit code is not checked here: the AGENTS.md starter waits for the setup skill, and the
+// CI machine has no agent. What matters is that the checks named here pass and the JSON parses.
+function checkDoctor(workspace: Workspace, ids: readonly string[]): void {
   const run = cyberzavod(workspace, ["doctor", "--json"]);
   const doctor = jsonOf(run, "doctor --json");
   const checks = doctor.checks as { id: string; status: string }[];
@@ -245,7 +246,7 @@ function checkDoctor(workspace: Workspace): void {
 
   assert.equal(doctor.schemaVersion, 1);
 
-  for (const id of ["node", "config", "hooks", "files", "gitignore"]) {
+  for (const id of ids) {
     assert.equal(statusOf(id), "passed", `doctor: check ${id}\n${run.stdout}`);
   }
 
@@ -262,17 +263,20 @@ function checkSync(workspace: Workspace): void {
   step("sync --check, sync --check --json");
 }
 
-async function checkRepeatedInit(workspace: Workspace): Promise<void> {
-  const settingsBefore = await readText(workspace.project, ".claude/settings.json");
+async function checkRepeatedInit(workspace: Workspace, files: readonly string[]): Promise<void> {
+  const filesBefore = await snapshot(workspace.project, files);
   const run = cyberzavod(workspace, ["init", "--yes"]);
 
   expectExit(run, SUCCESS, "repeated init");
   assert.match(run.stdout, /Nothing to do/);
 
-  const settingsAfter = await readText(workspace.project, ".claude/settings.json");
   const gitignore = await readText(workspace.project, ".gitignore");
 
-  assert.equal(settingsAfter, settingsBefore, "repeated init changed the settings");
+  assert.deepEqual(
+    await snapshot(workspace.project, files),
+    filesBefore,
+    "repeated init changed the files",
+  );
   assert.equal(countLines(gitignore, CAPTURE_IGNORE_ENTRY), 1, "duplicate .gitignore line");
   step("repeated init changes nothing");
 }
@@ -335,27 +339,240 @@ async function checkDisconnect(workspace: Workspace): Promise<void> {
   step("disconnect: the user's code, AGENTS.md, journal and settings are intact");
 }
 
+async function claudePath(tool: string, root: string, cli: string): Promise<void> {
+  const project = path.join(root, PROJECT_NAME);
+  const workspace: Workspace = { tool, project, cli, env: {} };
+
+  await createProject(project, {
+    ".claude/settings.json": `${JSON.stringify(USER_SETTINGS, null, 2)}\n`,
+  });
+  console.log("Claude Code");
+  await checkInit(workspace);
+  checkStatus(workspace);
+  checkDoctor(workspace, ["node", "config", "hooks", "files", "gitignore"]);
+  checkSync(workspace);
+  await checkRepeatedInit(workspace, [".claude/settings.json"]);
+  checkJournal(workspace);
+  await checkDisconnect(workspace);
+}
+
+// The human's Codex config and hooks before Cyberzavod: init and disconnect must leave these lines
+// as they were.
+const USER_CODEX_CONFIG = [
+  "# The human's own Codex config",
+  'model = "x"',
+  "",
+  '[projects."/other"]',
+  'trust_level = "trusted"',
+  "",
+].join("\n");
+const USER_CODEX_HOOKS = {
+  hooks: { Stop: [{ hooks: [{ type: "command", command: "echo user-hook" }] }] },
+};
+// Marks the project trust that Cyberzavod added to the human's Codex config.
+const TRUST_MARK = "# added by cyberzavod";
+const CODEX_SESSION_ID = "smoke-codex-session";
+const CODEX_SUBDIRECTORY = "src";
+const CODEX_GENERATED_PATHS = [
+  ".codex/config.toml",
+  ".codex/agents",
+  ".agents/skills",
+  ".cyberzavod/project.json",
+  ".cyberzavod/generated.json",
+];
+const CODEX_FILES_OF_OTHER_AGENT = ["CLAUDE.md", ".claude"];
+const CODEX_HOOKS_FILE = ".codex/hooks.json";
+const CODEX_RAW_DIRECTORY = ".cyberzavod/journal/capture/codex/raw";
+
+// Every command of the Codex path sees its own Codex home and no config of the machine's human.
+function codexEnvironment(root: string): Readonly<Record<string, string>> {
+  return {
+    CODEX_HOME: path.join(root, "codex-home"),
+    XDG_CONFIG_HOME: path.join(root, "config"),
+    APPDATA: path.join(root, "config"),
+  };
+}
+
+async function createCodexProject(workspace: Workspace): Promise<void> {
+  await createProject(workspace.project, {
+    [CODEX_HOOKS_FILE]: `${JSON.stringify(USER_CODEX_HOOKS, null, 2)}\n`,
+  });
+  await writeFiles(codexHomeOf(workspace), { "config.toml": USER_CODEX_CONFIG });
+}
+
+function codexHomeOf(workspace: Workspace): string {
+  const home = workspace.env.CODEX_HOME;
+
+  assert.ok(home, "the Codex path has no Codex home");
+
+  return home;
+}
+
+function codexConfigOf(workspace: Workspace): Promise<string> {
+  return readText(codexHomeOf(workspace), "config.toml");
+}
+
+async function checkCodexInit(workspace: Workspace): Promise<void> {
+  const run = cyberzavod(workspace, ["init", "--yes", "--agent", "codex"]);
+
+  expectExit(run, SUCCESS, "init --yes --agent codex");
+
+  for (const file of [...CODEX_GENERATED_PATHS, "AGENTS.md"]) {
+    assert.ok(existsSync(path.join(workspace.project, file)), `init did not create ${file}`);
+  }
+
+  for (const file of CODEX_FILES_OF_OTHER_AGENT) {
+    assert.ok(!existsSync(path.join(workspace.project, file)), `init created ${file}`);
+  }
+
+  const hooks = await readText(workspace.project, CODEX_HOOKS_FILE);
+  const config = await codexConfigOf(workspace);
+  const ownHandlers = hooks.split(/cyberzavod@\d+\.\d+\.\d+ hook /).length - 1;
+
+  assert.match(hooks, /echo user-hook/, "init lost the user's hook");
+  assert.match(
+    hooks,
+    /cyberzavod@\d+\.\d+\.\d+ hook stop --agent codex/,
+    "init did not install the stop hook",
+  );
+  assert.match(hooks, /git rev-parse --show-toplevel/, "hooks do not look for the project root");
+  assert.ok(config.startsWith(USER_CODEX_CONFIG), "init changed the user's Codex config");
+  assert.equal(config.split(TRUST_MARK).length - 1, 1, "init did not trust the project once");
+  assert.equal(
+    config.split("[hooks.state.").length - 1,
+    ownHandlers,
+    "init did not trust every hook of its own",
+  );
+  step("init --yes --agent codex: files, hooks and trust in the Codex config");
+}
+
+// A session of Codex may start in any directory of the project; the hook gets it as `cwd`.
+function checkCodexHooks(workspace: Workspace): void {
+  const { project } = workspace;
+  const record = (sessionId: string, cwd: string) =>
+    cyberzavod(workspace, ["hook", "record", "--agent", "codex"], {
+      input: JSON.stringify({
+        session_id: sessionId,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "Add dark mode",
+        cwd,
+      }),
+    });
+  const subdirectory = path.join(project, CODEX_SUBDIRECTORY);
+  const inRoot = record(CODEX_SESSION_ID, project);
+  const inSubdirectory = record(`${CODEX_SESSION_ID}-sub`, subdirectory);
+
+  expectExit(inRoot, SUCCESS, "hook record in the project directory");
+  expectExit(inSubdirectory, SUCCESS, "hook record in a subdirectory");
+
+  for (const sessionId of [CODEX_SESSION_ID, `${CODEX_SESSION_ID}-sub`]) {
+    const rawLog = path.join(project, CODEX_RAW_DIRECTORY, `${sessionId}.jsonl`);
+
+    assert.ok(existsSync(rawLog), `capture hook did not create the raw log of ${sessionId}`);
+  }
+
+  assert.ok(
+    !existsSync(path.join(subdirectory, ".cyberzavod")),
+    "a session in a subdirectory put the journal there",
+  );
+  step("hook record --agent codex: from the project and from a subdirectory");
+}
+
+function checkCodexGuard(workspace: Workspace): void {
+  const subdirectory = path.join(workspace.project, CODEX_SUBDIRECTORY);
+
+  for (const cwd of [workspace.project, subdirectory]) {
+    const guard = cyberzavod(workspace, ["hook", "guard", "--agent", "codex"], {
+      input: JSON.stringify({
+        session_id: CODEX_SESSION_ID,
+        hook_event_name: "PreToolUse",
+        tool_name: "Bash",
+        tool_input: { command: "cat .env" },
+        cwd,
+      }),
+    });
+
+    expectExit(guard, SUCCESS, `hook guard in ${path.relative(workspace.project, cwd) || "."}`);
+    assert.match(guard.stdout, /"permissionDecision":\s*"deny"/, "guard let `cat .env` through");
+  }
+
+  step("hook guard --agent codex denies cat .env: from the project and from a subdirectory");
+}
+
+async function checkCodexRepeatedInit(workspace: Workspace): Promise<void> {
+  const files = [CODEX_HOOKS_FILE, ".codex/config.toml"];
+  const before = [...(await snapshot(workspace.project, files)), await codexConfigOf(workspace)];
+  const run = cyberzavod(workspace, ["init", "--yes"]);
+  const after = [...(await snapshot(workspace.project, files)), await codexConfigOf(workspace)];
+
+  expectExit(run, SUCCESS, "repeated init");
+  assert.match(run.stdout, /Nothing to do/);
+  assert.deepEqual(after, before, "repeated init changed the files");
+  step("repeated init changes nothing");
+}
+
+async function checkCodexDisconnect(workspace: Workspace, configAfterInit: string): Promise<void> {
+  const { project } = workspace;
+  const keptFiles = [...Object.keys(SOURCE_FILES), "AGENTS.md"];
+  const before = await snapshot(project, keptFiles);
+
+  expectExit(cyberzavod(workspace, ["disconnect"]), FAILURE, "disconnect without a terminal");
+  assert.equal(await codexConfigOf(workspace), configAfterInit, "refusal changed the Codex config");
+  expectExit(cyberzavod(workspace, ["disconnect", "--yes"]), SUCCESS, "disconnect --yes");
+
+  for (const file of CODEX_GENERATED_PATHS) {
+    assert.ok(!existsSync(path.join(project, file)), `disconnect left ${file}`);
+  }
+
+  const hooks = JSON.parse(await readText(project, CODEX_HOOKS_FILE)) as unknown;
+  const rawLogs = await readdir(path.join(project, CODEX_RAW_DIRECTORY));
+
+  assert.deepEqual(
+    await snapshot(project, keptFiles),
+    before,
+    "disconnect changed the user's files",
+  );
+  assert.deepEqual(hooks, USER_CODEX_HOOKS, "disconnect did not leave only the user's hooks");
+  assert.equal(
+    await codexConfigOf(workspace),
+    USER_CODEX_CONFIG,
+    "disconnect did not return the Codex config to its first state",
+  );
+  assert.equal(rawLogs.length, 2, "disconnect touched the journal");
+  step("disconnect: the user's code, hooks and Codex config are as before init");
+}
+
+async function codexPath(tool: string, root: string, cli: string): Promise<void> {
+  const codexRoot = path.join(root, "codex-path");
+  const project = path.join(codexRoot, CODEX_PROJECT_NAME);
+  const workspace: Workspace = { tool, project, cli, env: codexEnvironment(codexRoot) };
+
+  await createCodexProject(workspace);
+  console.log("Codex");
+  await checkCodexInit(workspace);
+  checkStatus(workspace);
+  checkDoctor(workspace, ["node", "config", "hooks", "trust", "files", "gitignore"]);
+  checkSync(workspace);
+  await checkCodexRepeatedInit(workspace);
+  checkCodexHooks(workspace);
+  checkCodexGuard(workspace);
+  await checkCodexDisconnect(workspace, await codexConfigOf(workspace));
+}
+
 async function main(): Promise<void> {
   const root = await mkdtemp(path.join(os.tmpdir(), "cyberzavod-smoke-"));
   const tool = path.join(root, "tool");
-  const project = path.join(root, PROJECT_NAME);
 
   try {
     await mkdir(tool);
-    await createProject(project);
 
     const packed = packPackage(tool);
-    const workspace: Workspace = { tool, project, cli: await installPackage(tool, packed) };
+    const cli = await installPackage(tool, packed);
 
     step(`npm pack and install ${packed.filename}`);
-    checkVersion(workspace, packed);
-    await checkInit(workspace);
-    checkStatus(workspace);
-    checkDoctor(workspace);
-    checkSync(workspace);
-    await checkRepeatedInit(workspace);
-    checkJournal(workspace);
-    await checkDisconnect(workspace);
+    checkVersion({ tool, project: root, cli, env: {} }, packed);
+    await claudePath(tool, root, cli);
+    await codexPath(tool, root, cli);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

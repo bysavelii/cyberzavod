@@ -48,7 +48,17 @@ export type RawEvent =
       /** The agent's id of the call, for agents whose transcript names the call by it. */
       callId?: string;
     }
-  | { ts: number; kind: "subagent_start"; agent: string; agentId?: string }
+  | {
+      ts: number;
+      kind: "subagent_start";
+      agent: string;
+      agentId?: string;
+      /**
+       * The subagent's transcript, for agents that give it at the start: a run cut off before it
+       * stopped still has its tokens and report.
+       */
+      transcriptPath?: string;
+    }
   | {
       ts: number;
       kind: "subagent_stop";

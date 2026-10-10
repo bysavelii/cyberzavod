@@ -123,6 +123,25 @@ describe("transcriptsOf", () => {
     });
   });
 
+  it("считает токены и отчёт станции, которую оборвали до остановки: путь из её начала", async () => {
+    const station = await transcriptFile("station.jsonl", "станция");
+    const transcripts = transcriptsOf(lineFormat());
+    const events: RawEvent[] = [
+      {
+        ts: 1,
+        kind: "subagent_start",
+        agent: "reviewer",
+        agentId: "a1",
+        transcriptPath: station,
+      },
+    ];
+
+    const { meta } = await transcripts.inputsOf(events, KIT_MESSAGES.en);
+
+    expect(meta.runTokens).toEqual(new Map([["a1", "станция".length]]));
+    expect(meta.reports).toEqual([{ ts: 7, agentId: "a1", text: "станция" }]);
+  });
+
   it("исправляет исход вызовов по транскрипту сессии", async () => {
     const session = await transcriptFile("session.jsonl", "сессия");
     const station = await transcriptFile("station.jsonl", "станция");

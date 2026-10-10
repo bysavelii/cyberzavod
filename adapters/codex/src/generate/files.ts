@@ -142,7 +142,7 @@ function featureFrontmatter(project: CodexProject, guides: readonly StageGuide[]
 function stageCallText(project: CodexProject): string {
   return [
     "## How to call a stage in Codex",
-    "Call a stage with the `spawn_agent` tool: pass `agent_type` with the role name from the table and the whole assignment in `message`, then wait for the result with `wait_agent`. If `spawn_agent` is not in your tool list, find it with tool search (it lives in the `multi_agent_v1` namespace).",
+    'Call a stage with the `spawn_agent` tool: pass `agent_type` with the role name from the table and the whole assignment in `message`, then wait for the result with `wait_agent`. Pass `fork_turns: "none"` where the tool has that parameter: a stage starts from its assignment, not from your whole history, and a forked call cannot take another model. If the tool also asks for `task_name`, give a short lower-case name of the stage. If `spawn_agent` is not in your tool list, find it with tool search (it lives in the `multi_agent_v1` namespace).',
     `If the call fails with \`unknown agent_type\`, the project is not trusted in Codex yet: stop, tell the human and name \`${project.cli} doctor\`.`,
     `Stronger model for the second rework — \`${ESCALATION_MODEL}\`: pass \`model: "${ESCALATION_MODEL}"\` in the spawn_agent call.`,
   ].join("\n\n");

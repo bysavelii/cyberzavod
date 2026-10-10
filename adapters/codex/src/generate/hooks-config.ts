@@ -3,6 +3,7 @@
 
 import {
   hookCommand,
+  inPosixShell,
   inspectHooks as inspectKitHooks,
   mergedHooks,
   SKIP_ON_FAILURE,
@@ -31,11 +32,19 @@ export const GUARDED_TOOLS = `${SHELL_TOOL}|${PATCH_TOOL}`;
 
 const GUARD_TIMEOUT_SECONDS = 30;
 
-// --prefix . : Codex starts a hook in the session directory and gives it no variable with the
-// project directory, so the package is looked up from there. --prefer-offline and
-// --fetch-retries=0: a package in the npm cache is taken without contacting the registry, and
-// without network or cache npx fails at once rather than after minutes.
-const HOOK_RUNNER = "npx -y --prefer-offline --fetch-retries=0 --prefix .";
+// Codex starts a hook in the session directory, which may be a subdirectory of the project, and
+// gives it no variable with the project directory (Claude has $CLAUDE_PROJECT_DIR). The project root
+// is where Codex itself looks for `.codex/` first: the nearest `.git` upward, which is what
+// `git rev-parse --show-toplevel` answers. Outside a repository Codex uses the session directory,
+// and so does the fallback `pwd`. --prefer-offline and --fetch-retries=0: a package in the npm cache
+// is taken without contacting the registry, and without network or cache npx fails at once rather
+// than after minutes. The root is the git root, so a project that lives in a subdirectory of a
+// larger repository does not find its local package there and takes it from the npm cache.
+//
+// Codex runs a hook as `$SHELL -lc <command>`, and fish before 3.4 and tcsh do not read `$(…)` or
+// `||`: the command goes through `sh -c` (see `inPosixShell`) and works in any login shell.
+const PROJECT_ROOT_COMMAND = "$(git rev-parse --show-toplevel 2>/dev/null || pwd)";
+const HOOK_RUNNER = `npx -y --prefer-offline --fetch-retries=0 --prefix "${PROJECT_ROOT_COMMAND}"`;
 
 /**
  * Adapter error from a diagnostic of malformed hooks: the format text, framed by the catalog.
@@ -47,13 +56,15 @@ export function unparsedHooks(err: SettingsError): KitError {
 }
 
 function commandOf(version: string, hook: string, onFailure: string): string {
-  return hookCommand({
-    runner: HOOK_RUNNER,
-    version,
-    hook,
-    agentFlag: HOOK_AGENT_FLAG,
-    onFailure,
-  });
+  return inPosixShell(
+    hookCommand({
+      runner: HOOK_RUNNER,
+      version,
+      hook,
+      agentFlag: HOOK_AGENT_FLAG,
+      onFailure,
+    }),
+  );
 }
 
 /**

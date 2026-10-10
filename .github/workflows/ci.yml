@@ -88,13 +88,30 @@ jobs:
       - uses: actions/checkout@v7
       - run: make check-scripts
 
+  # The real Codex CLI (the version is pinned in adapters/codex/e2e/codex-version.ts) against a mock
+  # model API: no key, network only to npm. Codex starts commands in a bubblewrap sandbox, which
+  # Ubuntu 24.04 forbids to unprivileged users until the AppArmor restriction is lifted.
+  codex-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: make check-codex
+
   # Images are tagged with the full commit sha: by it a version is deployed and rolled back.
   # Third-party actions with write access to the registry are pinned by commit sha, not by tag.
   images:
     # Without a name GitHub lists all matrix values in it, including the "." of the site context.
     name: images (${{ matrix.image }})
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [web, api, scripts, package]
+    needs: [web, api, scripts, package, codex-e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

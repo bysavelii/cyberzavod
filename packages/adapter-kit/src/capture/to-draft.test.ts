@@ -618,6 +618,29 @@ describe("runTranscriptPaths", () => {
 
     expect([...paths]).toEqual([["c1", "/t/new"]]);
   });
+
+  it("берёт путь из начала запуска, который оборвали до остановки", () => {
+    const raw: RawEvent[] = [
+      { ts: 1, kind: "subagent_start", agent: "coder", agentId: "c1", transcriptPath: "/t/c1" },
+      { ts: 2, kind: "subagent_start", agent: "tester", agentId: "t1" },
+      { ts: 3, kind: "stop", transcriptPath: "/t/main.jsonl" },
+    ];
+
+    const paths = runTranscriptPaths(raw);
+
+    expect([...paths]).toEqual([["c1", "/t/c1"]]);
+  });
+
+  it("остановка запуска заменяет путь из его начала", () => {
+    const raw: RawEvent[] = [
+      { ts: 1, kind: "subagent_start", agent: "coder", agentId: "c1", transcriptPath: "/t/old" },
+      { ts: 2, kind: "subagent_stop", agent: "coder", agentId: "c1", transcriptPath: "/t/new" },
+    ];
+
+    const paths = runTranscriptPaths(raw);
+
+    expect([...paths]).toEqual([["c1", "/t/new"]]);
+  });
 });
 
 describe("sessionTranscriptPath", () => {
@@ -1002,6 +1025,17 @@ describe("stationTranscriptPaths", () => {
     const paths = stationTranscriptPaths(raw);
 
     expect(paths).toEqual(["/t/a.jsonl", "/t/p.jsonl"]);
+  });
+
+  it("берёт транскрипт станции, которая начала работу и не остановилась", () => {
+    const raw: RawEvent[] = [
+      { ts: 1, kind: "subagent_start", agent: "reviewer", transcriptPath: "/t/r.jsonl" },
+      { ts: 2, kind: "subagent_start", agent: "Explore", transcriptPath: "/t/e.jsonl" },
+    ];
+
+    const paths = stationTranscriptPaths(raw);
+
+    expect(paths).toEqual(["/t/r.jsonl"]);
   });
 });
 

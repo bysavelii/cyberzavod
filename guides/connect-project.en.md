@@ -6,14 +6,14 @@ order: 1
 
 ## Quickstart
 
-You need Node 22+, git and Claude Code. The project must be a git repository (in an empty folder run `git init`): `/feature` wants a clean working tree and makes commits.
+You need Node 22+, git and Claude Code or Codex CLI. The project must be a git repository (in an empty folder run `git init`): `/feature` wants a clean working tree and makes commits.
 
-Cyberzavod is agent-agnostic by design. Claude Code is currently the first fully supported adapter; other agents are not supported yet. A shorter version of this page: [Cyberzavod in 3 minutes](/guides/getting-started/).
+Cyberzavod is agent-agnostic by design. Two adapters are supported: Claude Code (the default) and Codex CLI (`init --agent codex`); other agents are not supported yet. A project is driven by one agent. Below, Codex differences are marked: skills are called with `$` instead of `/` (`$setup`, `$feature`, `$publish-recording`). A shorter version of this page: [Cyberzavod in 3 minutes](/guides/getting-started/).
 
-1. `npx cyberzavod init` in the project root. If npx asks to download the package, answer `y`. `init` shows what it found and asks `Continue? [Y/n]`, then writes the config, `AGENTS.md` and the agent files and prints what to commit. Commit those files.
-2. Open Claude Code in the project **after** `init` (a session started earlier is recorded without its start) and run `/setup`. It fills in `AGENTS.md` from your repository, asks only what the code cannot tell, and runs the checks once (the commands that must pass before an agent can finish a turn). Commit the files it changed (it lists them).
-3. `/feature <task>`. The task goes through the stages: plan, code, review, verify, record (a stage is one step of the process; most stages have their own agent). You approve the plan; at the end you get commits.
-4. `/publish-recording` in the same session. It turns the session into a recording (a clean copy of the task: stages, prompts, messages, time, tokens) and asks you to review it. With your consent it sends the recording to your gallery (a personal page on the site; the first time you sign in with GitHub) and prints a link like `https://cyberzavod.com/r/?id=…`. The floor, the top-down view on the site, plays the task from that link.
+1. `npx cyberzavod init` in the project root (for Codex, `npx cyberzavod init --agent codex`). If npx asks to download the package, answer `y`. `init` shows what it found and asks `Continue? [Y/n]`, then writes the config, `AGENTS.md` and the agent files and prints what to commit. Commit those files.
+2. Open the agent in the project **after** `init` (a session started earlier is recorded without its start) and run `/setup` (in Codex, `$setup`). It fills in `AGENTS.md` from your repository, asks only what the code cannot tell, and runs the checks once (the commands that must pass before an agent can finish a turn). Commit the files it changed (it lists them).
+3. `/feature <task>` (in Codex, `$feature <task>`). The task goes through the stages: plan, code, review, verify, record (a stage is one step of the process; most stages have their own agent). You approve the plan; at the end you get commits.
+4. `/publish-recording` (in Codex, `$publish-recording`) in the same session. It turns the session into a recording (a clean copy of the task: stages, prompts, messages, time, tokens) and asks you to review it. With your consent it sends the recording to your gallery (a personal page on the site; the first time you sign in with GitHub) and prints a link like `https://cyberzavod.com/r/?id=…`. The floor, the top-down view on the site, plays the task from that link.
 
 Finished builds you can open and watch are in the examples below.
 
@@ -21,10 +21,14 @@ Finished builds you can open and watch are in the examples below.
 
 - `.cyberzavod/project.json`: the project marker and config: project id, process, agent per stage, checks and the journal path. The journal is the `.cyberzavod/journal/` directory with sessions, decisions and notes as JSON files.
 - `AGENTS.md`: project rules for agents and people. A handwritten `CLAUDE.md` that was there becomes `AGENTS.md`; otherwise a starter is added for `/setup` to fill in.
-- `CLAUDE.md`: a thin entry point for Claude Code. It is generated: don't edit it by hand.
-- `.claude/agents/`: the stage agents and the recording editor.
-- `.claude/skills/`: the `/setup`, `/feature` and `/publish-recording` skills.
-- `.claude/settings.json`: the recording and stop hooks and a rule that forbids reading and editing `.env`. Your own settings and hooks in this file stay as they are.
+- For Claude Code, `CLAUDE.md`: a thin entry point. It is generated: don't edit it by hand.
+- For Claude Code, `.claude/agents/`: the stage agents and the recording editor.
+- For Claude Code, `.claude/skills/`: the `/setup`, `/feature` and `/publish-recording` skills.
+- For Claude Code, `.claude/settings.json`: the recording and stop hooks and a rule that forbids reading and editing `.env`. Your own settings and hooks in this file stay as they are.
+- For Codex CLI, `.codex/config.toml`: the workflow rules for the agent and a raised `AGENTS.md` size limit (Codex reads `AGENTS.md` itself, so there is no `CLAUDE.md`).
+- For Codex CLI, `.codex/agents/`: a role per stage and the recording editor.
+- For Codex CLI, `.agents/skills/`: the `$setup`, `$feature` and `$publish-recording` skills.
+- For Codex CLI, `.codex/hooks.json`: the recording and stop hooks and a guard that refuses `.env` and raw session logs. Your own hooks in this file stay as they are.
 - `.cyberzavod/generated.json`: the list of files Cyberzavod generated, with their checksums. It tells a generated file from one you edited by hand.
 - a line in `.gitignore`: the journal's `capture/` directory with raw session logs stays out of git.
 
@@ -32,13 +36,17 @@ Finished builds you can open and watch are in the examples below.
 
 Cyberzavod never silently overwrites a file it does not own. If a file of yours stands where a generated one should go, `init` stops before writing anything and says what to do. Running `init` again in a connected project changes nothing: it says whether the files are current or `npx cyberzavod sync` is needed.
 
+### Codex trust
+
+Codex runs a project's hooks and roles only for a project you trust, and only with hooks you have approved. This is stored in your own Codex config (`$CODEX_HOME/config.toml`, by default `~/.codex/config.toml`), never in the project. After its single confirmation, `init --agent codex` marks the project trusted and approves the hooks it wrote; `sync` carries the approval over to the updated hooks, and `disconnect` takes back only what `init` added, leaving trust you gave yourself. It edits the file line by line and keeps your comments and order. `doctor` checks the trust and says how to fix it. The hook commands are POSIX shell: on Windows run Codex in WSL, because the hooks on native Windows are not verified.
+
 ## Commands
 
 Run every command as `npx cyberzavod <command>`.
 
 **Getting started**
 
-- `init`: set up the project: config, `AGENTS.md`, agent files.
+- `init`: set up the project: config, `AGENTS.md`, agent files. `--agent claude|codex` picks the agent; the default is `claude`.
 - `status`: project, workflow, stage agents, checks and the journal.
 
 **Journal**
@@ -76,7 +84,8 @@ It prints a line for each item: ✓ is fine, – is a note, ✗ is a problem. Un
 
 What `doctor` does not catch:
 
-- Claude Code was open before `init`. The session has no start in the journal, so the recording has an empty project, version and process. You can fill them in while editing, but it is simpler to start a new session.
+- The agent was open before `init`. The session has no start in the journal, so the recording has an empty project, version and process. You can fill them in while editing, but it is simpler to start a new session.
+- Codex ignores the roles and hooks. The project or its hooks are not trusted in your Codex config; `doctor` says so. Open Codex in the project and trust it (or add `trust_level = "trusted"` for the project to your Codex config) and approve the hooks with `/hooks`.
 - The stop hook won't let go. That means the checks are red: fix what they print.
 - No network and no package in the npm cache. The recording hooks are skipped, and the stop hook lets the agent finish with a message that the checks were skipped.
 
@@ -88,7 +97,7 @@ An unexpected error prints one line. To see the stack trace for a bug report, ru
 npx cyberzavod disconnect
 ```
 
-It first shows what it will remove and what it will keep, and asks `Continue? [Y/n]`. It removes only what Cyberzavod added: the generated `CLAUDE.md` files, the agents and skills in `.claude/`, its hooks and rules in `.claude/settings.json`, `.cyberzavod/generated.json` and `.cyberzavod/project.json`. It keeps your code, `AGENTS.md`, the journal, the `.gitignore` line, your own settings and hooks, and any generated file you edited by hand. Without a terminal, add `--yes`. Claude Code reads `CLAUDE.md`, so if you keep working with it, create a `CLAUDE.md` with one line, `@AGENTS.md`.
+It first shows what it will remove and what it will keep, and asks `Continue? [Y/n]`. It removes only what Cyberzavod added: the generated `CLAUDE.md` files, the agents and skills in `.claude/` (for Codex, `.codex/` and `.agents/skills/`), its hooks and rules in `.claude/settings.json` (for Codex, `.codex/hooks.json`, and the trust it added in your Codex config), `.cyberzavod/generated.json` and `.cyberzavod/project.json`. It keeps your code, `AGENTS.md`, the journal, the `.gitignore` line, your own settings and hooks, and any generated file you edited by hand. Without a terminal, add `--yes`. Claude Code reads `CLAUDE.md`, so if you keep working with it, create a `CLAUDE.md` with one line, `@AGENTS.md`.
 
 ## Live examples
 
@@ -104,7 +113,7 @@ Cyberzavod is a harness: a ready-made set of process, roles, principles and chec
 
 ### Stages and roles
 
-The lead, that is the `/feature` session itself, doesn't write code; it hands the work to the stages. Each stage is an agent from `.claude/agents/` with its own model; with `model: "default"` the adapter picks it:
+The lead, that is the `/feature` session itself, doesn't write code; it hands the work to the stages. Each stage is an agent from `.claude/agents/` (for Codex, a role from `.codex/agents/`) with its own model; with `model: "default"` the adapter picks it. The list is for Claude Code; Codex gets its own models, a frontier one for plan and review and a workhorse one for code and verify, and the lead calls a stage with `spawn_agent`:
 
 - plan: `analyst`, Opus: a mistake in the plan costs the most;
 - code: `coder`, Sonnet, and Opus on the second rework;
@@ -157,7 +166,7 @@ Every record has the same envelope: version, type, time, project, session, sourc
 
 `/publish-recording` walks you through the steps:
 
-1. Draft. `draft` builds it from the most recent raw session log. The draft goes to `capture/claude/drafts/` of the journal.
+1. Draft. `draft` builds it from the most recent raw session log. The draft goes to `capture/<agent>/drafts/` of the journal (`capture/claude/drafts/` or `capture/codex/drafts/`).
 2. Editing. The session writes the recording title and rewrites your prompts into a clean form: the main instruction and the clarifications. The `recording-editor` agent writes the messages between the stages and to you and the human interventions, that is, the moments when the automation waited for your word.
 3. Human review. The skill shows tables of prompts, messages and interventions. Read them carefully: what you approve goes into the recording. Publishing scans the text for addresses and keys, but that is only a safety net.
 4. Publishing. `publish` checks the format and writes `sessions/<id>.json` to the project journal.
@@ -209,4 +218,4 @@ The home page and the project pages of the site are built from the factory repos
 
 Before that, run `pnpm install` and `make check-web` in the clone: it builds the site and catches a broken card or recording.
 
-The sources of the harness, the CLI and the Claude Code adapter are in the factory repository: [`harness/`](https://github.com/bysavelii/cyberzavod/tree/main/harness), [`packages/cli`](https://github.com/bysavelii/cyberzavod/tree/main/packages/cli) and [`adapters/claude`](https://github.com/bysavelii/cyberzavod/tree/main/adapters/claude). They ship to npm as a single package, `cyberzavod`.
+The sources of the harness, the CLI and the Claude Code and Codex CLI adapters are in the factory repository: [`harness/`](https://github.com/bysavelii/cyberzavod/tree/main/harness), [`packages/cli`](https://github.com/bysavelii/cyberzavod/tree/main/packages/cli), [`adapters/claude`](https://github.com/bysavelii/cyberzavod/tree/main/adapters/claude) and [`adapters/codex`](https://github.com/bysavelii/cyberzavod/tree/main/adapters/codex). They ship to npm as a single package, `cyberzavod`.

@@ -10,6 +10,7 @@ import {
   stopPayload,
   SESSION_ID,
   SUBAGENT_ID,
+  SUBAGENT_ROLLOUT,
   subagentAssignmentPayload,
   subagentShellPayload,
   subagentStartPayload,
@@ -108,7 +109,7 @@ describe("fromCodexHookPayload", () => {
     expect(JSON.stringify([spawned, waited])).not.toContain("review the change");
   });
 
-  it("записывает начало сабагента с типом и id", () => {
+  it("записывает начало сабагента с типом, id и его транскриптом", () => {
     const event = fromCodexHookPayload(subagentStartPayload(), TS);
 
     expect(event).toEqual({
@@ -116,6 +117,7 @@ describe("fromCodexHookPayload", () => {
       kind: "subagent_start",
       agent: "reviewer",
       agentId: SUBAGENT_ID,
+      transcriptPath: SUBAGENT_ROLLOUT,
     });
   });
 

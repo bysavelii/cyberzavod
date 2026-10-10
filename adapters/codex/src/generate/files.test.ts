@@ -172,6 +172,8 @@ describe("codexFiles", () => {
     expect(skill).toContain("Lead rules.");
     expect(skill).toContain("`spawn_agent`");
     expect(skill).toContain("`wait_agent`");
+    expect(skill).toContain('`fork_turns: "none"`');
+    expect(skill).toContain("`task_name`");
     expect(skill).toContain("`unknown agent_type`");
     expect(skill).toContain("gpt-6-astra");
     expect(skill).toContain("`$ARGUMENTS`");

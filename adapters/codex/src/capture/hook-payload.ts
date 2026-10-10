@@ -92,7 +92,10 @@ export function fromCodexHookPayload(payload: unknown, ts: number): RawEvent | n
     case "SubagentStart":
       return withOptional<Extract<RawEvent, { kind: "subagent_start" }>>(
         { ts, kind: "subagent_start", agent: subagentNameOf(payload) },
-        { agentId: stringField(payload, "agent_id") },
+        {
+          agentId: stringField(payload, "agent_id"),
+          transcriptPath: stringField(payload, "transcript_path"),
+        },
       );
     case "SubagentStop":
       return withOptional<Extract<RawEvent, { kind: "subagent_stop" }>>(

@@ -5,6 +5,7 @@ import { KIT_MESSAGES } from "../messages/catalog.ts";
 import {
   hookCommand,
   hookNameOf,
+  inPosixShell,
   inspectHooks,
   isOwnHandler,
   mergedHooks,
@@ -68,7 +69,29 @@ describe("stopFailureCommand", () => {
   });
 });
 
+describe("inPosixShell", () => {
+  it("кладёт команду в одинарные кавычки: путь с пробелами и запасной путь остаются внутри", () => {
+    const command = 'npx --prefix "$(pwd)" cyberzavod@1.2.3 hook stop || true';
+
+    const wrapped = inPosixShell(command);
+
+    expect(wrapped).toBe(`sh -c '${command}'`);
+  });
+
+  it("закрывает, экранирует и снова открывает одинарную кавычку внутри команды", () => {
+    const wrapped = inPosixShell("echo 'a b'");
+
+    expect(wrapped).toBe("sh -c 'echo '\\''a b'\\'''");
+  });
+});
+
 describe("isOwnHandler", () => {
+  it("узнаёт обработчик, обёрнутый в sh -c", () => {
+    const command = inPosixShell(ownCommand("0.1.0"));
+
+    expect(isOwnHandler({ type: "command", command })).toBe(true);
+  });
+
   it("узнаёт обработчик по пакету и имени хука при любых флагах npx", () => {
     expect(isOwnHandler({ type: "command", command: ownCommand("0.1.0") })).toBe(true);
     expect(isOwnHandler({ type: "command", command: "npx -y --other cyberzavod@9 hook x" })).toBe(
@@ -100,6 +123,14 @@ describe("hookNameOf", () => {
     const name = hookNameOf({ type: "command", command });
 
     expect(name).toBe("turn-start");
+  });
+
+  it("читает имя хука из команды в sh -c", () => {
+    const command = inPosixShell(ownCommand("1.2.3", "guard"));
+
+    const name = hookNameOf({ type: "command", command });
+
+    expect(name).toBe("guard");
   });
 
   it("не даёт имени чужому обработчику и прежнему вшитому CLI", () => {

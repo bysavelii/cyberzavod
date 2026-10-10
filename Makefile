@@ -1,7 +1,7 @@
 # Shared project commands. `make help` lists them.
 
 .DEFAULT_GOAL := help
-.PHONY: help up down dev api-dev format check check-web check-api check-docker check-scripts
+.PHONY: help up down dev api-dev format check check-web check-api check-docker check-scripts check-codex
 
 help: ## Show commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-17s %s\n", $$1, $$2}'
@@ -22,7 +22,7 @@ format: ## Bring code to style: Prettier and ESLint --fix for TS, gofumpt and go
 	pnpm format
 	cd apps/api && golangci-lint fmt ./...
 
-check: check-web check-api check-docker check-scripts ## All checks: the same as CI runs
+check: check-web check-api check-docker check-scripts check-codex ## All checks: the same as CI runs
 
 # Checking agent files against the build is here, not in check-scripts: the build needs Node
 # and workspace dependencies, which the scripts job lacks. `pnpm -r run check` builds the CLI.
@@ -40,6 +40,12 @@ check-api: ## golangci-lint, tests and build of the API, Go formatting hook test
 check-docker: ## Build the API and site Docker images
 	docker build -q -t cyberzavod-api:check apps/api >/dev/null
 	docker build -q -f apps/web/Dockerfile -t cyberzavod-web:check . >/dev/null
+
+# The end-to-end run needs npm (it installs the pinned Codex, e2e/codex-version.ts) and is slow, so it
+# stays out of check-web, which the stop hook runs. CODEX_E2E_BIN=<path> uses a Codex that is
+# already installed, for runs without network.
+check-codex: ## Real `codex exec` against a mock model API: trust, hooks, subagent role, recording
+	pnpm --filter @cyberzavod/adapter-codex e2e
 
 check-scripts: ## Dev container and project hook shell scripts: shellcheck and hook tests
 	docker run --rm -v "$(CURDIR):/mnt:ro" koalaman/shellcheck:stable -x \
