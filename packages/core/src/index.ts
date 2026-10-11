@@ -79,6 +79,14 @@ export {
 } from "./record.ts";
 export { reworksOf, type Rework } from "./rework.ts";
 export { stageModelsOf, type StageModels } from "./stage-models.ts";
+export { PRICES_AS_OF } from "./model-prices.ts";
+export {
+  costOf,
+  type Cost,
+  type SessionCost,
+  type StageCost,
+  type UnknownCostReason,
+} from "./cost.ts";
 export type { RecordStore } from "./store.ts";
 export { RULES_TODO_MARK } from "./project-rules.ts";
 export { ProjectError, parseProject, type Project } from "./project.ts";
