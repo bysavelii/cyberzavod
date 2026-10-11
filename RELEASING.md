@@ -43,11 +43,11 @@ npm настраивает Trusted Publisher только у существую�
 
 1. Организация `cyberzavod` создана на npmjs.com (см. выше), вы в ней с правом публикации.
 2. Шаги 1–5 выпуска выполнены, версия 0.14.0 лежит в `main`, тег ещё не поставлен.
-3. Чистая копия `main` на коммите версии, зависимости и вход в npm:
+3. Чистая копия `main` на коммите версии, зависимости и вход в npm (`git status --short` ничего не печатает). В блоках ниже нет комментариев `#`: интерактивный zsh не считает `#` комментарием и передаёт его команде аргументом:
 
    ```bash
    git switch main && git pull --ff-only
-   git status --short   # пусто
+   git status --short
    pnpm install --frozen-lockfile
    npm login
    ```
@@ -62,11 +62,11 @@ npm настраивает Trusted Publisher только у существую�
 
    В списке должны быть `LICENSE`, `README.md`, `package.json`, `bin/cyberzavod-viewer.mjs`, `dist/index.html`, `dist/THIRD_PARTY_LICENSES` и файлы `dist/assets/`; без `dist/` пакет бесполезен. `npm publish` и сам собирает цех в `prepack`, сборка выше нужна, чтобы увидеть сбой до публикации.
 
-5. Опубликовать с тем же манифестом, что и CI (без `devDependencies`), и вернуть файл:
+5. Опубликовать с тем же манифестом, что и CI (без `devDependencies`), и вернуть файл; `npm publish` запросит одноразовый код 2FA:
 
    ```bash
    npm pkg delete devDependencies
-   npm publish --access public   # запросит одноразовый код 2FA
+   npm publish --access public
    git checkout package.json
    ```
 
