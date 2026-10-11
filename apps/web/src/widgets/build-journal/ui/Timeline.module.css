@@ -27,6 +27,11 @@
   margin: 0 0 var(--space-m);
 }
 
+/* The link to report a gallery recording stands above the list of entries. */
+.report {
+  margin: 0 0 var(--space-m);
+}
+
 /* Separates the "what the process caught" block from the list of entries below it. */
 .heading {
   margin: var(--space-l) 0 var(--space-m);
