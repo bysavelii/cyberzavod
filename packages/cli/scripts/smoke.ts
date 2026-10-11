@@ -148,10 +148,17 @@ function jsonOf(run: Run, command: string): Record<string, unknown> {
   return JSON.parse(run.stdout) as Record<string, unknown>;
 }
 
-// npm may print build script output before the JSON: the document starts at the first `[`.
+// npm prints the output of `prepack` before the JSON, and colored build logs contain `[` too:
+// the document starts at the first line that is exactly `[`.
+const PACK_JSON_START = /^\[$/m;
+
 function packDirectory(directory: string, destination: string): PackedPackage {
   const output = npm(["pack", "--json", "--pack-destination", destination], directory);
-  const [packed] = JSON.parse(output.slice(output.indexOf("["))) as PackedPackage[];
+  const jsonStart = output.search(PACK_JSON_START);
+
+  assert.ok(jsonStart >= 0, `npm pack printed no JSON for ${directory}:\n${output}`);
+
+  const [packed] = JSON.parse(output.slice(jsonStart)) as PackedPackage[];
 
   assert.ok(packed, `npm pack returned no archive for ${directory}`);
   console.log(
