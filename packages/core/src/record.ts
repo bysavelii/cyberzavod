@@ -4,10 +4,19 @@
 // everything visible on screen must be derived from here.
 
 import { isLine, isObject } from "./guards.ts";
+import limits from "./record-limits.json" with { type: "json" };
 import { isStage, type Stage } from "./stage.ts";
 
 /** Record format version. Adding a new record or event type does not change it. */
 export const RECORD_VERSION = 1;
+
+/**
+ * Length limits of record text fields, in Unicode code points. `idLength`: ids and the task label;
+ * `lineLength`: single-line fields; `textLength`: full texts of messages and interventions. The
+ * limits live in `record-limits.json`: the gallery server keeps a copy checked by its tests.
+ */
+export const RECORD_LIMITS: Readonly<{ idLength: number; lineLength: number; textLength: number }> =
+  limits;
 
 /**
  * The human's prompt in clean form: the main instruction in one line and refinements as a list.
@@ -261,6 +270,18 @@ function isInstant(value: unknown): value is string {
 
 type Fail = (why: string) => RecordError;
 
+const failRecord: Fail = (why) => new RecordError(why);
+
+// Code points, not UTF-16 units, so that an emoji counts as one character on the server too. The
+// units count is never smaller, so a short string skips the expensive split.
+function isWithin(value: string, limit: number): boolean {
+  return value.length <= limit || [...value].length <= limit;
+}
+
+function requireWithin(value: string, limit: number, field: string, fail: Fail): void {
+  if (!isWithin(value, limit)) throw fail(`${field} must be at most ${limit} characters`);
+}
+
 function parsePrompt(raw: Record<string, unknown>, t: number, fail: Fail): PromptEvent {
   const { goal, requirements, model } = raw;
 
@@ -269,10 +290,17 @@ function parsePrompt(raw: Record<string, unknown>, t: number, fail: Fail): Promp
     throw fail("requirements must be a list of non-empty single-line strings");
   }
 
+  requireWithin(goal, RECORD_LIMITS.lineLength, "goal", fail);
+  requirements.forEach((requirement, index) => {
+    requireWithin(requirement, RECORD_LIMITS.lineLength, `requirements[${index}]`, fail);
+  });
+
   const prompt: PromptEvent = { t, type: "prompt", goal, requirements: [...requirements] };
 
   if (model === undefined) return prompt;
   if (!isLine(model)) throw fail("model must be a non-empty single-line string");
+
+  requireWithin(model, RECORD_LIMITS.lineLength, "model", fail);
 
   return { ...prompt, model };
 }
@@ -286,6 +314,9 @@ function parseMessage(raw: Record<string, unknown>, t: number, fail: Fail): Mess
   if (!isLine(line)) throw fail("line must be a non-empty single-line string");
   if (!isText(text)) throw fail("text must be a non-empty string");
 
+  requireWithin(line, RECORD_LIMITS.lineLength, "line", fail);
+  requireWithin(text, RECORD_LIMITS.textLength, "text", fail);
+
   return { t, type: "message", from, to, line, text };
 }
 
@@ -295,6 +326,9 @@ function parseIntervention(raw: Record<string, unknown>, t: number, fail: Fail):
   if (!isInterventionReason(reason)) throw fail(`unknown reason ${String(reason)}`);
   if (!isLine(line)) throw fail("line must be a non-empty single-line string");
   if (!isText(text)) throw fail("text must be a non-empty string");
+
+  requireWithin(line, RECORD_LIMITS.lineLength, "line", fail);
+  requireWithin(text, RECORD_LIMITS.textLength, "text", fail);
 
   return { t, type: "intervention", reason, line, text };
 }
@@ -309,12 +343,16 @@ function parseStageEnter(raw: Record<string, unknown>, t: number, fail: Fail): S
   if (model === undefined) return entry;
   if (!isLine(model)) throw fail("model must be a non-empty single-line string");
 
+  requireWithin(model, RECORD_LIMITS.lineLength, "model", fail);
+
   return { ...entry, model };
 }
 
 function parseStageFail(raw: Record<string, unknown>, t: number, fail: Fail): SessionEvent {
   if (!isStage(raw.stage)) throw fail(`unknown stage ${String(raw.stage)}`);
   if (typeof raw.reason !== "string") throw fail("missing reason");
+
+  requireWithin(raw.reason, RECORD_LIMITS.lineLength, "reason", fail);
 
   return { t, type: "stage_fail", stage: raw.stage, reason: raw.reason };
 }
@@ -383,6 +421,9 @@ function parseSource(raw: unknown): RecordSource {
       if (!isLine(raw.provider)) throw new RecordError("source has no provider");
       if (!isLine(raw.agent)) throw new RecordError("source has no agent");
 
+      requireWithin(raw.provider, RECORD_LIMITS.lineLength, "source.provider", failRecord);
+      requireWithin(raw.agent, RECORD_LIMITS.lineLength, "source.agent", failRecord);
+
       return { type: "agent", provider: raw.provider, agent: raw.agent };
     default:
       throw new RecordError(`unknown source ${String(raw.type)}`);
@@ -403,6 +444,9 @@ function parseHeader(raw: Record<string, unknown>): RecordHeader {
     throw new RecordError("timestamp must be an ISO 8601 UTC time, as from toISOString");
   }
 
+  requireWithin(raw.id, RECORD_LIMITS.idLength, "id", failRecord);
+  requireWithin(raw.projectId, RECORD_LIMITS.idLength, "projectId", failRecord);
+
   const header: RecordHeader = {
     version: RECORD_VERSION,
     id: raw.id,
@@ -413,6 +457,8 @@ function parseHeader(raw: Record<string, unknown>): RecordHeader {
 
   if (raw.sessionId === undefined) return header;
   if (!isLine(raw.sessionId)) throw new RecordError("sessionId must be a non-empty string");
+
+  requireWithin(raw.sessionId, RECORD_LIMITS.lineLength, "sessionId", failRecord);
 
   return { ...header, sessionId: raw.sessionId };
 }
@@ -456,12 +502,18 @@ function parseSessionData(raw: unknown): SessionData {
     throw new RecordError("harness must be a non-empty single-line string");
   }
 
+  requireWithin(title, RECORD_LIMITS.lineLength, "title", failRecord);
+  requireWithin(workflow, RECORD_LIMITS.lineLength, "workflow", failRecord);
+  requireWithin(harness, RECORD_LIMITS.lineLength, "harness", failRecord);
+
   const data: SessionData = { title, language, workflow, harness, events: parseEvents(raw.events) };
 
   if (task === undefined) return data;
   if (!isRecordId(task)) {
     throw new RecordError("task must contain only letters, digits, underscores and hyphens");
   }
+
+  requireWithin(task, RECORD_LIMITS.idLength, "task", failRecord);
 
   return { ...data, task };
 }

@@ -39,8 +39,8 @@ async function readRecordText(project: ProjectAt, id: string): Promise<string> {
   }
 }
 
-// The core checks the recording format: the server only looks at the envelope, there is no second
-// format description.
+// The core checks the recording format: the server checks the envelope and the field lengths by
+// the same limits of the core (`RECORD_LIMITS`), there is no second format description.
 function parseSession(text: string, id: string): SessionRecord {
   const record = parseKnownRecord(text, id);
 

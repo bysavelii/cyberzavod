@@ -32,6 +32,7 @@ export {
 } from "./project-config.ts";
 export {
   RECORD_VERSION,
+  RECORD_LIMITS,
   INTERVENTION_REASONS,
   RecordError,
   parseSessionEvent,
