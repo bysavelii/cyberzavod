@@ -2,6 +2,7 @@
 
 import { CLI_COMMAND } from "../cli-command.ts";
 import type { KitMessages } from "./kit-messages.ts";
+import { formatUsd } from "./money.ts";
 
 /** Shared adapter texts in Russian. */
 export const ru: KitMessages = {
@@ -57,6 +58,20 @@ export const ru: KitMessages = {
     published: (file) => `опубликовано: ${file}`,
     notReady: ({ file, problems }) => `${file} не готов к публикации:\n${problems}`,
     buildProblem: ({ buildId, reason }) => `сборка ${buildId}: ${reason}`,
+    cost: ({ usd, pricesAsOf }) =>
+      `стоимость по ценам API: ${formatUsd(usd)} (цены на ${pricesAsOf})`,
+    costUnknown: (reason) => {
+      switch (reason.type) {
+        case "no_usage":
+          return "стоимость неизвестна: в записи нет расхода токенов";
+        case "no_breakdown":
+          return "стоимость неизвестна: токены не разбиты по видам";
+        case "no_model":
+          return "стоимость неизвестна: не записано, какая модель потратила токены";
+        case "unpriced_model":
+          return `стоимость неизвестна: нет цены модели ${reason.model}`;
+      }
+    },
   },
   errors: {
     fileConflicts: (files) =>

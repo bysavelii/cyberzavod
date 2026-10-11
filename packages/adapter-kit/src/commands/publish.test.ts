@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RecordSource } from "@cyberzavod/core";
+import { PRICES_AS_OF, type RecordSource } from "@cyberzavod/core";
 import { PROJECT_CONFIG_FILE } from "@cyberzavod/storage";
 import { FIRST_BUILD_ID, interleavedDraft } from "../capture/draft.fixtures.ts";
 import type { Draft } from "../capture/draft.ts";
@@ -13,6 +13,8 @@ import { publishSessions } from "./publish.ts";
 const JOURNAL = ".cyberzavod/journal";
 const AGENT = "codex";
 const SOURCE: RecordSource = { type: "agent", provider: "openai", agent: AGENT };
+// The first build of the draft has six `usage` events, $4 each in `pricedDraft`.
+const EXPECTED_FIRST_BUILD_USD = "24.00";
 const DRAFTS = path.join(JOURNAL, "capture", AGENT, "drafts");
 
 let root: string;
@@ -27,6 +29,27 @@ async function connectProject(): Promise<void> {
 async function saveDraft(draft: Draft): Promise<void> {
   await mkdir(path.join(root, DRAFTS), { recursive: true });
   await writeFile(path.join(root, DRAFTS, `${draft.id}.json`), JSON.stringify(draft));
+}
+
+// Every `usage` of the draft gets a priced model and a breakdown of 1M input tokens, so each costs $4.
+function pricedDraft(): Draft {
+  const draft = interleavedDraft();
+  const oneMillion = 1_000_000;
+  const breakdown = {
+    input: oneMillion,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite5m: 0,
+    cacheWrite1h: 0,
+  };
+
+  draft.events = draft.events.map((event) =>
+    event.type === "usage"
+      ? { ...event, tokens: oneMillion, model: "claude-opus-5-5", breakdown }
+      : event,
+  );
+
+  return draft;
 }
 
 function printed(spy: ReturnType<typeof vi.spyOn>): string {
@@ -66,6 +89,60 @@ describe("publishSessions", () => {
       files: [`${FIRST_BUILD_ID}.json`],
       output: expect.stringContaining("published: ") as string,
     });
+  });
+
+  it("печатает стоимость записи по ценам API с датой цен", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await saveDraft(pricedDraft());
+
+    await publishSessions({
+      projectDirectory: root,
+      buildId: FIRST_BUILD_ID,
+      messages: KIT_MESSAGES.en,
+      agent: AGENT,
+      source: SOURCE,
+    });
+
+    expect(printed(log)).toContain(
+      `cost at API prices: $${EXPECTED_FIRST_BUILD_USD} (prices of ${PRICES_AS_OF})`,
+    );
+  });
+
+  it("печатает на языке сообщений причину, по которой стоимость неизвестна", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await saveDraft(interleavedDraft());
+
+    await publishSessions({
+      projectDirectory: root,
+      buildId: FIRST_BUILD_ID,
+      messages: KIT_MESSAGES.ru,
+      agent: AGENT,
+      source: SOURCE,
+    });
+
+    expect(printed(log)).toContain("стоимость неизвестна: токены не разбиты по видам");
+  });
+
+  it("называет модель без цены", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const draft = pricedDraft();
+
+    draft.events = draft.events.map((event) =>
+      event.type === "usage" ? { ...event, model: "gpt-6-astra" } : event,
+    );
+    await saveDraft(draft);
+
+    await publishSessions({
+      projectDirectory: root,
+      buildId: FIRST_BUILD_ID,
+      messages: KIT_MESSAGES.en,
+      agent: AGENT,
+      source: SOURCE,
+    });
+
+    expect(printed(log)).toContain("cost unknown: no price for model gpt-6-astra");
   });
 
   it("ставит в запись источник агента, чья это сессия", async () => {
