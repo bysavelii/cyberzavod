@@ -1,4 +1,4 @@
-// Package store keeps galleries in Postgres: authors, their recordings, public gallery stats.
+// Package store keeps galleries in Postgres: authors and their recordings.
 package store
 
 import (
@@ -176,10 +176,6 @@ func (s *Store) saveRecording(ctx context.Context, tx pgx.Tx, ownerID int64, rec
 		}
 	}
 
-	if err := touchOwner(ctx, tx, ownerID); err != nil {
-		return gallery.Summary{}, false, err
-	}
-
 	return summary, isNew, nil
 }
 
@@ -309,45 +305,19 @@ func (s *Store) ensureStorage(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
-// touchOwner marks that the author's gallery changed: the list of public galleries
-// is sorted by this time.
-func touchOwner(ctx context.Context, tx pgx.Tx, ownerID int64) error {
-	_, err := tx.Exec(ctx, `UPDATE users SET updated_at = now() WHERE github_id = $1`, ownerID)
-	if err != nil {
-		return fmt.Errorf("отметка о перемене галереи: %w", err)
-	}
-
-	return nil
-}
-
 // DeleteRecording removes a recording from the author's gallery. Missing: gallery.ErrNotFound.
 func (s *Store) DeleteRecording(ctx context.Context, ownerID int64, recordID string) error {
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if err := deleteRecording(ctx, tx, ownerID, recordID); err != nil {
-			return err
-		}
-
-		return touchOwner(ctx, tx, ownerID)
-	})
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM recordings WHERE owner_id = $1 AND record_id = $2`, ownerID, recordID)
 	if err != nil {
 		return fmt.Errorf("удаление записи: %w", err)
 	}
 
-	return nil
-}
-
-func deleteRecording(ctx context.Context, tx pgx.Tx, ownerID int64, recordID string) error {
-	tag, err := tx.Exec(ctx,
-		`DELETE FROM recordings WHERE owner_id = $1 AND record_id = $2`, ownerID, recordID)
-	if err != nil {
-		return err
-	}
-
 	if tag.RowsAffected() == 0 {
-		return gallery.ErrNotFound
+		return fmt.Errorf("удаление записи: %w", gallery.ErrNotFound)
 	}
 
 	return nil
@@ -370,30 +340,6 @@ func (s *Store) SetGalleryPublic(ctx context.Context, ownerID int64, isPublic bo
 	}
 
 	return nil
-}
-
-// PublicGalleries returns public galleries, recently changed first.
-func (s *Store) PublicGalleries(ctx context.Context) ([]gallery.Overview, error) {
-	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
-	defer cancel()
-
-	rows, err := s.pool.Query(ctx, `
-		SELECT u.login, count(r.record_id), u.updated_at
-		FROM users u
-		LEFT JOIN recordings r ON r.owner_id = u.github_id
-		WHERE u.gallery_public
-		GROUP BY u.github_id
-		ORDER BY u.updated_at DESC, u.login`)
-	if err != nil {
-		return nil, fmt.Errorf("чтение открытых галерей: %w", err)
-	}
-
-	overviews, err := pgx.CollectRows(rows, pgx.RowToStructByPos[gallery.Overview])
-	if err != nil {
-		return nil, fmt.Errorf("чтение открытых галерей: %w", err)
-	}
-
-	return overviews, nil
 }
 
 // PublicGallery returns a public gallery by login, case-insensitively.

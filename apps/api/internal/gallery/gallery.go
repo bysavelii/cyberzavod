@@ -1,5 +1,5 @@
 // Package gallery describes recording galleries: who their author is, what they hold and what
-// is known about them publicly. It knows nothing about the database or HTTP, only its own types.
+// a visitor with the gallery link sees. It knows nothing about the database or HTTP, only its own types.
 package gallery
 
 import (
@@ -64,17 +64,10 @@ type Account struct {
 	Recordings    []Summary
 }
 
-// Gallery is a public gallery as a visitor sees it.
+// Gallery is a public gallery opened by its link, as a visitor sees it.
 type Gallery struct {
 	Login      string    `json:"login"`
 	Recordings []Summary `json:"recordings"`
-}
-
-// Overview is a row of the shared list of public galleries.
-type Overview struct {
-	Login          string    `json:"login"`
-	RecordingCount int       `json:"recordingCount"`
-	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 // SharedRecording is a recording opened by a secret link: whose it is and the body as uploaded.
@@ -82,34 +75,4 @@ type SharedRecording struct {
 	Owner         string          `json:"owner"`
 	GalleryPublic bool            `json:"galleryPublic"`
 	Record        json.RawMessage `json:"record"`
-}
-
-// Stats is a summary of the recordings in public galleries.
-type Stats struct {
-	Recordings int   `json:"recordings"`
-	Authors    int   `json:"authors"`
-	Tokens     int64 `json:"tokens"`
-	// WithoutReworks is how many recordings passed without a single stage_fail.
-	WithoutReworks int                   `json:"withoutReworks"`
-	Returns        []StageReturns        `json:"returns"`
-	Interventions  []ReasonInterventions `json:"interventions"`
-	Outcomes       Outcomes              `json:"outcomes"`
-}
-
-// StageReturns is how many times work was sent back from stage Stage.
-type StageReturns struct {
-	Stage string `json:"stage"`
-	Count int    `json:"count"`
-}
-
-// ReasonInterventions is how many times the human was called for reason Reason.
-type ReasonInterventions struct {
-	Reason string `json:"reason"`
-	Count  int    `json:"count"`
-}
-
-// Outcomes is how many builds ended successfully and how many did not.
-type Outcomes struct {
-	OK     int `json:"ok"`
-	Failed int `json:"failed"`
 }

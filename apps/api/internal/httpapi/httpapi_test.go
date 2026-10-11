@@ -75,11 +75,6 @@ func (f *fakeGalleries) SetGalleryPublic(context.Context, int64, bool) error {
 	return f.err
 }
 
-func (f *fakeGalleries) PublicGalleries(context.Context) ([]gallery.Overview, error) {
-	overviews := []gallery.Overview{{Login: author.Login, RecordingCount: len(f.recordings)}}
-	return overviews, f.err
-}
-
 func (f *fakeGalleries) PublicGallery(context.Context, string) (gallery.Gallery, error) {
 	return gallery.Gallery{Login: author.Login, Recordings: f.recordings}, f.err
 }
@@ -87,11 +82,6 @@ func (f *fakeGalleries) PublicGallery(context.Context, string) (gallery.Gallery,
 func (f *fakeGalleries) SharedRecording(context.Context, string) (gallery.SharedRecording, error) {
 	shared := gallery.SharedRecording{Owner: author.Login, Record: []byte(sessionBody("shared"))}
 	return shared, f.err
-}
-
-func (f *fakeGalleries) Stats(context.Context) (gallery.Stats, error) {
-	stats := gallery.Stats{Returns: []gallery.StageReturns{}, Interventions: []gallery.ReasonInterventions{}}
-	return stats, f.err
 }
 
 // sessionBody is the body of a session recording with identifier id.
