@@ -2,6 +2,9 @@
 
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { SessionRecord } from "@cyberzavod/core";
+import type { AgentAdapter } from "./agent-adapter.ts";
+import { claudeAdapter } from "./claude.ts";
 import { createAdapters, type Adapters } from "./registry.ts";
 
 /**
@@ -20,3 +23,22 @@ const UNUSED_CODEX_HOME = path.join(tmpdir(), "cyberzavod-unused-codex-home", ".
 
 /** Adapters of all agents, built the way the CLI builds them, over a Codex home that is not used. */
 export const adapters = adaptersWithCodexHome(UNUSED_CODEX_HOME);
+
+/**
+ * The Claude Code adapter whose drafts preview as the given recordings, for tests that need no
+ * draft files.
+ * @param {SessionRecord[]} builds What `previewDrafts` returns.
+ * @returns {AgentAdapter} The adapter.
+ */
+export function adapterShowing(builds: SessionRecord[]): AgentAdapter {
+  return { ...claudeAdapter, previewDrafts: () => Promise.resolve(builds) };
+}
+
+/**
+ * Adapters of all agents in which Claude Code previews the given recordings as its drafts.
+ * @param {SessionRecord[]} builds What the Claude Code adapter's `previewDrafts` returns.
+ * @returns {Adapters} Adapters by agent name.
+ */
+export function adaptersShowing(builds: SessionRecord[]): Adapters {
+  return { ...adapters, claude: adapterShowing(builds) };
+}

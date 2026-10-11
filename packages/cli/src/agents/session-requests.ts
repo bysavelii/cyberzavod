@@ -1,12 +1,13 @@
-// The CLI's requests to draft and publish a session as the adapters' options: what the agents
-// share, so each adapter file only picks its function.
+// The CLI's requests to draft, publish and preview a session as the adapters' options: what the
+// agents share, so each adapter file only picks its function.
 
 import {
   KIT_MESSAGES,
   type AgentDraftOptions,
+  type AgentPreviewOptions,
   type AgentPublishOptions,
 } from "@cyberzavod/adapter-kit";
-import type { DraftRequest, PublishRequest } from "./agent-adapter.ts";
+import type { DraftRequest, PreviewRequest, PublishRequest } from "./agent-adapter.ts";
 
 /**
  * The options of an adapter's `draftSession` for the request.
@@ -42,4 +43,16 @@ export function publishOptionsOf({
     ...(draftPath === undefined ? {} : { draftPath }),
     ...(buildId === undefined ? {} : { buildId }),
   };
+}
+
+/**
+ * The options of an adapter's `previewDrafts` for the request.
+ * @param {PreviewRequest} request Project and language.
+ * @returns {AgentPreviewOptions} The options with the messages in the request's language.
+ */
+export function previewOptionsOf({
+  projectDirectory,
+  language,
+}: PreviewRequest): AgentPreviewOptions {
+  return { projectDirectory, language, messages: KIT_MESSAGES[language] };
 }

@@ -13,6 +13,7 @@ import {
   inspectClaudeHooks,
   isHookName,
   previewClaude,
+  previewDrafts,
   publishSessions,
   runHook,
   SETTINGS_FILE,
@@ -30,7 +31,7 @@ import type {
   FilesRequest,
   HookRequest,
 } from "./agent-adapter.ts";
-import { draftOptionsOf, publishOptionsOf } from "./session-requests.ts";
+import { draftOptionsOf, previewOptionsOf, publishOptionsOf } from "./session-requests.ts";
 
 const CLAUDE_PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR";
 
@@ -110,5 +111,6 @@ export const claudeAdapter: AgentAdapter = {
   runHook: runClaudeHook,
   draftSession: (request) => draftSession(draftOptionsOf(request)),
   publishSessions: (request) => publishSessions(publishOptionsOf(request)),
+  previewDrafts: (request) => previewDrafts(previewOptionsOf(request)),
   describeError: describeClaudeError,
 };

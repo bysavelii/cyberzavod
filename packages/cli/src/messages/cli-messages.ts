@@ -13,6 +13,7 @@ export const COMMAND_NAMES = [
   "status",
   "decision",
   "note",
+  "view",
   "draft",
   "publish",
   "login",
@@ -284,6 +285,19 @@ export interface JournalMessages {
   recorded(path: string): string;
 }
 
+/** `view` command texts. */
+export interface ViewMessages {
+  /** Before the factory floor package is fetched: the first run downloads it; `spec` names it. */
+  preparing(spec: string): string;
+  /** The line the address is read from, by the human and by the smoke check. */
+  address(url: string): string;
+  stopHint: string;
+  /** The browser could not be opened; the address is above. */
+  openFailed: string;
+  /** A request of the browser failed, for example the journal is corrupt; `reason` says why. */
+  requestFailed(reason: string): string;
+}
+
 /** `login` and `logout` command texts. */
 export interface LoginMessages {
   openVerification(params: { url: string; code: string }): string;
@@ -335,6 +349,10 @@ export interface ErrorMessages {
   languageFlagWithoutValue: string;
   unsupportedLanguage(params: { value: string; supported: string }): string;
   projectNotFound(directory: string): string;
+  /** npx could not get the factory floor package; `spec` is what it was asked for. */
+  viewerUnavailable(spec: string): string;
+  /** The factory floor package has no built files at `directory`. */
+  viewerBroken(directory: string): string;
   jsonNeedsPreview: string;
   packageJsonInvalid(params: { file: string; reason: string }): string;
   unexpected(reason: string): string;
@@ -374,6 +392,7 @@ export interface CliMessages {
   disconnect: DisconnectMessages;
   status: StatusMessages;
   journal: JournalMessages;
+  view: ViewMessages;
   login: LoginMessages;
   share: ShareMessages;
   gallery: GalleryMessages;

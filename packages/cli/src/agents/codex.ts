@@ -18,6 +18,7 @@ import {
   planConnectTrust,
   planDisconnectTrust,
   previewCodex,
+  previewDrafts,
   publishSessions,
   runCodexHook,
   syncCodex,
@@ -39,7 +40,7 @@ import type {
   UserConfigAccess,
   UserConfigReading,
 } from "./agent-adapter.ts";
-import { draftOptionsOf, publishOptionsOf } from "./session-requests.ts";
+import { draftOptionsOf, previewOptionsOf, publishOptionsOf } from "./session-requests.ts";
 
 const terms: AgentTerms = {
   product: "Codex",
@@ -161,6 +162,7 @@ export function createCodexAdapter(source: CodexHomeSource): AgentAdapter {
     runHook: runCodexHookByName,
     draftSession: (request) => draftSession(draftOptionsOf(request)),
     publishSessions: (request) => publishSessions(publishOptionsOf(request)),
+    previewDrafts: (request) => previewDrafts(previewOptionsOf(request)),
     describeError: describeCodexError,
   };
 }
