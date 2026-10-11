@@ -18,7 +18,8 @@
     "packages/cli/CLAUDE.md": "sha256:76491f484c64a98559a9edb1eda994709a7a41e193e5f10476d139ed1bcf3d98",
     "packages/core/CLAUDE.md": "sha256:76491f484c64a98559a9edb1eda994709a7a41e193e5f10476d139ed1bcf3d98",
     "packages/player/CLAUDE.md": "sha256:76491f484c64a98559a9edb1eda994709a7a41e193e5f10476d139ed1bcf3d98",
-    "packages/storage/CLAUDE.md": "sha256:76491f484c64a98559a9edb1eda994709a7a41e193e5f10476d139ed1bcf3d98"
+    "packages/storage/CLAUDE.md": "sha256:76491f484c64a98559a9edb1eda994709a7a41e193e5f10476d139ed1bcf3d98",
+    "packages/viewer/CLAUDE.md": "sha256:76491f484c64a98559a9edb1eda994709a7a41e193e5f10476d139ed1bcf3d98"
   },
   "settings": {
     "deny": []

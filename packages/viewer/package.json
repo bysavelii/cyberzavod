@@ -1,0 +1,45 @@
+{
+  "name": "@cyberzavod/viewer",
+  "version": "0.13.0",
+  "description": "The Cyberzavod factory floor for your own recordings and drafts. It has no commands of its own: `npx cyberzavod view` fetches and serves it.",
+  "license": "MIT",
+  "author": {
+    "name": "bysavelii",
+    "url": "https://bysavelii.com"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "harness",
+    "cyberzavod",
+    "viewer"
+  ],
+  "homepage": "https://cyberzavod.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bysavelii/cyberzavod.git",
+    "directory": "packages/viewer"
+  },
+  "type": "module",
+  "bin": {
+    "cyberzavod-viewer": "bin/cyberzavod-viewer.mjs"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "vite build",
+    "prepack": "node -e \"require('node:fs').copyFileSync('../../LICENSE', 'LICENSE')\" && vite build",
+    "check": "tsc -p . && vite build && vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "typescript": "^6.0.3",
+    "vite": "8.3.2",
+    "vite-plugin-solid": "2.11.14"
+  }
+}

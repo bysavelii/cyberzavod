@@ -25,7 +25,8 @@ format: ## Bring code to style: Prettier and ESLint --fix for TS, gofumpt and go
 check: check-web check-api check-docker check-scripts check-codex ## All checks: the same as CI runs
 
 # Checking agent files against the build is here, not in check-scripts: the build needs Node
-# and workspace dependencies, which the scripts job lacks. `pnpm -r run check` builds the CLI.
+# and workspace dependencies, which the scripts job lacks. `pnpm -r run check` builds the CLI and
+# the viewer's factory floor.
 check-web: ## Style, types, tests and build of frontend and packages; agent files match the harness
 	pnpm lint
 	pnpm -r run check
