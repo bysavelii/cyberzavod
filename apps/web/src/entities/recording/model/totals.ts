@@ -11,6 +11,8 @@ export interface RecordingTotals {
   readonly reworks: number;
   /** How many builds passed every stage on the first try. */
   readonly buildsWithoutReworks: number;
+  /** How many builds ended successfully. */
+  readonly buildsSucceeded: number;
   readonly interventions: number;
 }
 
@@ -24,6 +26,7 @@ const NO_TOTALS: RecordingTotals = {
   prompts: 0,
   reworks: 0,
   buildsWithoutReworks: 0,
+  buildsSucceeded: 0,
   interventions: 0,
 };
 
@@ -37,6 +40,7 @@ function withBuild(totals: RecordingTotals, build: BuildStats): RecordingTotals 
     prompts: totals.prompts + build.prompts,
     reworks: totals.reworks + build.reworks,
     buildsWithoutReworks: totals.buildsWithoutReworks + (isWithoutReworks ? 1 : 0),
+    buildsSucceeded: totals.buildsSucceeded + (build.ok ? 1 : 0),
     interventions: totals.interventions + build.interventions,
   };
 }

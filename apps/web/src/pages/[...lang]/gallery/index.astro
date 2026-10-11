@@ -3,7 +3,6 @@ import type { GetStaticPaths } from "astro";
 import GameLayout from "@/app/layouts/GameLayout.astro";
 import { GalleryArticle } from "@/widgets/gallery";
 import { LanguageQuery } from "@/features/language-query";
-import { publishedRecordings } from "@/entities/recording";
 import { LOCALES, type Locale } from "@/shared/i18n/locale.ts";
 import { localeParam } from "@/shared/i18n/path.ts";
 import { UI_TEXT } from "@/shared/i18n/ui-text.ts";
@@ -26,6 +25,6 @@ const { locale } = Astro.props;
   title={UI_TEXT.pages.galleriesTitle[locale]}
   description={UI_TEXT.pages.galleriesDescription[locale]}
 >
-  <GalleryArticle recordings={publishedRecordings} locale={locale} />
+  <GalleryArticle locale={locale} />
   <LanguageQuery client:idle />
 </GameLayout>

@@ -1,18 +1,16 @@
 ---
 // Game screen: the factory floor fills the window, the menu on the left, recordings, guides and
-// "about" panels on top. Galleries and stats are entered from the recordings panel: a menu tile no
-// longer fits at 360px. GitHub sign-in is a menu tile on a wide screen and a button in the
-// recordings panel on any.
+// "about" panels on top. Stats are entered from the recordings panel: a menu tile no longer fits
+// at 360px. GitHub sign-in is a menu tile on a wide screen and a button in the recordings panel on
+// any.
 // The page content, the factory floor with its HUD, sits in the field to the right of the menu.
 import BaseLayout from "./BaseLayout.astro";
 import { GuideList } from "@/widgets/guide-list";
 import { RecordingsByProject } from "@/widgets/recording-list";
 import { Sidebar } from "@/widgets/sidebar";
 import { AccountLink, SignInFailedNotice } from "@/features/sign-in";
-import { galleriesUrl } from "@/entities/gallery";
 import { publishedGuides } from "@/entities/guide";
-import { statsUrl } from "@/entities/stats";
-import { publishedRecordings } from "@/entities/recording";
+import { publishedRecordings, statsUrl } from "@/entities/recording";
 import { PANELS } from "@/shared/config/panels.ts";
 import { site } from "@/shared/config/site.ts";
 import { LOCALE_NAMES, otherLocales, type Locale } from "@/shared/i18n/locale.ts";
@@ -71,9 +69,6 @@ const closeLabel = UI_TEXT.panels.close[locale];
       <div class="other-builds">
         <p>{UI_TEXT.lists.otherBuilds[locale]}</p>
         <div class="links">
-          <ButtonLink href={galleriesUrl(locale)}>
-            {UI_TEXT.pages.galleriesTitle[locale]}
-          </ButtonLink>
           <ButtonLink href={statsUrl(locale)}>{UI_TEXT.pages.statsTitle[locale]}</ButtonLink>
         </div>
         <p>{UI_TEXT.account.ownGallery[locale]}</p>

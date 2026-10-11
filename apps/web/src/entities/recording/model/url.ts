@@ -20,3 +20,12 @@ export function recordingUrl(id: string, locale: Locale): string {
 export function comparisonUrl(task: string, locale: Locale): string {
   return localizedPath(locale, `/comparisons/${task}/`);
 }
+
+/**
+ * The analytics page address.
+ * @param {Locale} locale Page language.
+ * @returns {string} A path like `/stats/`, for Russian `/ru/stats/`.
+ */
+export function statsUrl(locale: Locale): string {
+  return localizedPath(locale, "/stats/");
+}

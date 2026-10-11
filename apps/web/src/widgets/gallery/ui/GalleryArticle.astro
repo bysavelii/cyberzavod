@@ -1,21 +1,16 @@
 ---
-// The galleries page in the field: the list and an author's gallery come from the API in the
-// browser. At build time there are no address parameters, so the markup has the shared list
-// loading. The examples above the list are assembled from the site recordings at build time.
-import type { SessionRecord } from "@cyberzavod/core";
+// The galleries page in the field: an author's gallery comes from the API in the browser. At
+// build time there are no address parameters, so the markup has the page still opening.
 import type { Locale } from "@/shared/i18n/locale.ts";
 import { Panel } from "@/shared/ui";
 import { GalleryBoard } from "./GalleryBoard.tsx";
-import GalleryExamples from "./GalleryExamples.astro";
 
 interface Props {
-  /** Site build recordings: the examples above user galleries come from them. */
-  recordings: readonly SessionRecord[];
   /** Page language. */
   locale: Locale;
 }
 
-const { recordings, locale } = Astro.props;
+const { locale } = Astro.props;
 
 if (Astro.site === undefined) throw new Error("в astro.config.ts не задан site");
 
@@ -24,9 +19,7 @@ const siteUrl = Astro.site.href;
 
 <Panel scrollable>
   <div class="article">
-    <GalleryBoard client:load locale={locale} siteUrl={siteUrl}>
-      <GalleryExamples slot="examples" recordings={recordings} locale={locale} />
-    </GalleryBoard>
+    <GalleryBoard client:load locale={locale} siteUrl={siteUrl} />
   </div>
 </Panel>
 

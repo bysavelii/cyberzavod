@@ -1,13 +1,7 @@
 import { parseRecord, type JournalRecord, type SessionRecord } from "@cyberzavod/core";
 import { ApiResponseError } from "@/shared/api/errors.ts";
 import { arrayAt, booleanAt, countAt, objectAt, stringAt } from "@/shared/api/fields.ts";
-import type {
-  Gallery,
-  GalleryListing,
-  OwnGallery,
-  RecordingSummary,
-  SharedRecording,
-} from "./gallery.ts";
+import type { Gallery, OwnGallery, RecordingSummary, SharedRecording } from "./gallery.ts";
 
 function summaryOf(raw: unknown): RecordingSummary {
   const place = "запись галереи";
@@ -21,17 +15,6 @@ function summaryOf(raw: unknown): RecordingSummary {
     language: stringAt(summary, "language", place),
     startedAt: stringAt(summary, "startedAt", place),
     uploadedAt: stringAt(summary, "uploadedAt", place),
-  };
-}
-
-function listingOf(raw: unknown): GalleryListing {
-  const place = "галерея в списке";
-  const listing = objectAt(raw, place);
-
-  return {
-    login: stringAt(listing, "login", place),
-    recordingCount: countAt(listing, "recordingCount", place),
-    updatedAt: stringAt(listing, "updatedAt", place),
   };
 }
 
@@ -52,19 +35,6 @@ function sessionOf(raw: unknown): SessionRecord {
   }
 
   return record;
-}
-
-/**
- * Parses the `GET /api/galleries` response.
- * @param {unknown} raw Response body.
- * @returns {readonly GalleryListing[]} Public galleries in API order, newest first.
- * @throws {ApiResponseError} If the response has the wrong shape.
- */
-export function parseGalleries(raw: unknown): readonly GalleryListing[] {
-  const place = "ответ /api/galleries";
-  const response = objectAt(raw, place);
-
-  return arrayAt(response, "galleries", place).map(listingOf);
 }
 
 /**

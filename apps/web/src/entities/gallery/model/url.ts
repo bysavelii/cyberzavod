@@ -11,12 +11,7 @@ function withQuery(path: string, name: string, value: string): string {
   return `${path}?${query.toString()}`;
 }
 
-/**
- * The address of the public galleries list.
- * @param {Locale} locale Page language.
- * @returns {string} A path like `/gallery/`, for Russian `/ru/gallery/`.
- */
-export function galleriesUrl(locale: Locale): string {
+function galleriesUrl(locale: Locale): string {
   return localizedPath(locale, API_PAGES.galleries);
 }
 

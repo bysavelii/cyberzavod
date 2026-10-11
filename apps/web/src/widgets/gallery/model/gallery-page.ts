@@ -1,18 +1,21 @@
-// One galleries page serves both the shared list and an author's gallery: the `user` address
-// parameter decides what to show, and the page learns it only in the browser.
+// One galleries page serves every author's gallery and the page without a link to one: the `user`
+// address parameter decides what to show, and the page learns it only in the browser.
 
 import { atom, type ReadableAtom } from "nanostores";
-import { queryParamOf, type Gallery, type GalleryListing } from "@/entities/gallery";
+import { queryParamOf, type Gallery } from "@/entities/gallery";
 import { LOADING, settle, type Remote } from "@/shared/api/remote.ts";
 
-/** What is on the galleries page: the shared list of public galleries or an author's gallery. */
+/**
+ * What is on the galleries page: the address is not read yet (this is how the page looks at build
+ * time), the introduction without a gallery link, or an author's gallery.
+ */
 export type GalleryPage =
-  | { readonly view: "list"; readonly galleries: Remote<readonly GalleryListing[]> }
+  | { readonly view: "opening" }
+  | { readonly view: "intro" }
   | { readonly view: "author"; readonly login: string; readonly gallery: Remote<Gallery> };
 
 /** Galleries page requests to the API. */
 export interface GalleryRequests {
-  fetchGalleries(): Promise<readonly GalleryListing[]>;
   fetchGallery(login: string): Promise<Gallery>;
 }
 
@@ -20,7 +23,7 @@ export interface GalleryRequests {
 export interface GalleryPageModel {
   readonly $page: ReadableAtom<GalleryPage>;
   /**
-   * Opens the author's gallery if the address has a login, otherwise the shared list.
+   * Opens the author's gallery if the address has a login, otherwise the introduction.
    * @param {string} search Address parameters, `location.search`.
    * @returns {Promise<void>} When the data arrives or it is clear why there is none.
    */
@@ -28,21 +31,14 @@ export interface GalleryPageModel {
 }
 
 /**
- * Creates the galleries page model. The initial state is the shared list loading: this is also how
- * the page looks at build time, when there is no address with parameters yet.
+ * Creates the galleries page model. The initial state is `opening`: this is also how the page
+ * looks at build time, when there is no address with parameters yet, so those who came by an
+ * author's link do not see the introduction flash.
  * @param {GalleryRequests} requests API requests.
  * @returns {GalleryPageModel} Page model.
  */
 export function createGalleryPageModel(requests: GalleryRequests): GalleryPageModel {
-  const $page = atom<GalleryPage>({ view: "list", galleries: LOADING });
-
-  const showList = async () => {
-    $page.set({ view: "list", galleries: LOADING });
-
-    const galleries = await settle(() => requests.fetchGalleries());
-
-    $page.set({ view: "list", galleries });
-  };
+  const $page = atom<GalleryPage>({ view: "opening" });
 
   const showAuthor = async (login: string) => {
     $page.set({ view: "author", login, gallery: LOADING });
@@ -54,10 +50,16 @@ export function createGalleryPageModel(requests: GalleryRequests): GalleryPageMo
 
   return {
     $page,
-    open: (search) => {
+    open: async (search) => {
       const login = queryParamOf(search, "galleryOwner");
 
-      return login === undefined ? showList() : showAuthor(login);
+      if (login === undefined) {
+        $page.set({ view: "intro" });
+
+        return;
+      }
+
+      await showAuthor(login);
     },
   };
 }

@@ -14,12 +14,15 @@ describe("isUnindexedPath", () => {
     expect(unindexed).toBe(true);
   });
 
-  it.each([API_PAGES.galleries, API_PAGES.stats, "/", "/recordings/a-1/"])(
-    "оставляет открытой страницу %s",
-    (path) => {
-      const unindexed = isUnindexedPath(path);
+  it("закрывает от поисковиков страницу галерей", () => {
+    const unindexed = isUnindexedPath(API_PAGES.galleries);
 
-      expect(unindexed).toBe(false);
-    },
-  );
+    expect(unindexed).toBe(true);
+  });
+
+  it.each(["/stats/", "/", "/recordings/a-1/"])("оставляет открытой страницу %s", (path) => {
+    const unindexed = isUnindexedPath(path);
+
+    expect(unindexed).toBe(false);
+  });
 });

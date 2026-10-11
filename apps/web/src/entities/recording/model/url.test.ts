@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comparisonUrl, recordingUrl } from "./url.ts";
+import { comparisonUrl, recordingUrl, statsUrl } from "./url.ts";
 
 describe("recordingUrl", () => {
   it("оставляет адрес в корне для английского", () => {
@@ -26,5 +26,16 @@ describe("comparisonUrl", () => {
     const url = comparisonUrl("split-bill", "ru");
 
     expect(url).toBe("/ru/comparisons/split-bill/");
+  });
+});
+
+describe("statsUrl", () => {
+  it.each([
+    ["en", "/stats/"],
+    ["ru", "/ru/stats/"],
+  ] as const)("ведёт на аналитику на языке %s", (locale, expected) => {
+    const url = statsUrl(locale);
+
+    expect(url).toBe(expected);
   });
 });

@@ -59,6 +59,14 @@ function recordingWith(counts: BuildCounts): SessionRecord {
   };
 }
 
+function failedRecording(recording: SessionRecord): SessionRecord {
+  const events = recording.data.events.map((event): SessionEvent => {
+    return event.type === "build_end" ? { ...event, ok: false } : event;
+  });
+
+  return { ...recording, data: { ...recording.data, events } };
+}
+
 function quietBuild(): BuildCounts {
   return { durationMs: 60_000, tokens: 1_000, prompts: 1, reworks: 0, interventions: 0 };
 }
@@ -75,6 +83,7 @@ function totalsWith(changes: Partial<RecordingTotals>): RecordingTotals {
     prompts: 6,
     reworks: 3,
     buildsWithoutReworks: 2,
+    buildsSucceeded: 3,
     interventions: 1,
     ...changes,
   };
@@ -93,8 +102,19 @@ describe("totalsOf", () => {
       prompts: 3,
       reworks: 2,
       buildsWithoutReworks: 1,
+      buildsSucceeded: 2,
       interventions: 1,
     });
+  });
+
+  it("считает успешными только сборки, закончившиеся успехом", () => {
+    const busyRecording = recordingWith(busyBuild());
+    const failedBuild = failedRecording(busyRecording);
+    const recordings = [recordingWith(quietBuild()), failedBuild];
+
+    const totals = totalsOf(recordings);
+
+    expect([totals.builds, totals.buildsSucceeded]).toEqual([2, 1]);
   });
 
   it("считает сборки без возвратов отдельно от числа возвратов", () => {

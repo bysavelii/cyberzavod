@@ -1,11 +1,7 @@
-import { describe, expect, it } from "vitest";
-import type { Gallery, GalleryListing } from "@/entities/gallery";
+import { describe, expect, it, vi } from "vitest";
+import type { Gallery } from "@/entities/gallery";
 import { ApiRequestError } from "@/shared/api/errors.ts";
 import { createGalleryPageModel, type GalleryRequests } from "./gallery-page.ts";
-
-function listing(): GalleryListing {
-  return { login: "alice", recordingCount: 2, updatedAt: "2026-10-06T10:00:00Z" };
-}
 
 function aliceGallery(): Gallery {
   return { login: "alice", recordings: [] };
@@ -13,7 +9,6 @@ function aliceGallery(): Gallery {
 
 function requestsOf(galleries: readonly string[]): GalleryRequests {
   return {
-    fetchGalleries: () => Promise.resolve([listing()]),
     fetchGallery: (login) =>
       galleries.includes(login)
         ? Promise.resolve(aliceGallery())
@@ -22,23 +17,22 @@ function requestsOf(galleries: readonly string[]): GalleryRequests {
 }
 
 describe("createGalleryPageModel", () => {
-  it("начинает с общего списка в загрузке", () => {
+  it("начинает с открытия: адрес ещё не прочитан", () => {
     const model = createGalleryPageModel(requestsOf(["alice"]));
 
     const page = model.$page.get();
 
-    expect(page).toEqual({ view: "list", galleries: { status: "loading" } });
+    expect(page).toEqual({ view: "opening" });
   });
 
-  it("показывает общий список, если в адресе нет автора", async () => {
-    const model = createGalleryPageModel(requestsOf(["alice"]));
+  it("показывает вступление, если в адресе нет автора", async () => {
+    const requests = { fetchGallery: vi.fn(() => Promise.resolve(aliceGallery())) };
+    const model = createGalleryPageModel(requests);
 
     await model.open("");
 
-    expect(model.$page.get()).toEqual({
-      view: "list",
-      galleries: { status: "ready", value: [listing()] },
-    });
+    expect(model.$page.get()).toEqual({ view: "intro" });
+    expect(requests.fetchGallery).not.toHaveBeenCalled();
   });
 
   it("показывает галерею автора из адреса", async () => {

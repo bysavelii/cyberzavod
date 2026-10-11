@@ -84,8 +84,8 @@ export const UI_TEXT = {
     noRecordings: { en: "No builds yet.", ru: "Записей пока нет." },
     noGuides: { en: "No guides yet.", ru: "Гайдов пока нет." },
     otherBuilds: {
-      en: "Below are example projects the floor built from scratch. Builds of other projects are in the galleries of Cyberzavod users.",
-      ru: "Ниже — проекты, которые цех собрал с нуля. Сборки других проектов — в галереях пользователей Киберзавода.",
+      en: "Below are the projects the floor built from scratch. Analytics shows where the process stalls across their builds.",
+      ru: "Ниже — проекты, которые цех собрал с нуля. Аналитика показывает, где процесс буксует в их сборках.",
     },
     tokens: {
       en: { one: "token", other: "tokens" },
@@ -124,8 +124,8 @@ export const UI_TEXT = {
     },
     galleriesTitle: { en: "Galleries", ru: "Галереи" },
     galleriesDescription: {
-      en: "Open galleries of Cyberzavod users: build recordings of their projects on the floor of AI agents.",
-      ru: "Открытые галереи пользователей Киберзавода: записи сборок их проектов в цехе ИИ-агентов.",
+      en: "A Cyberzavod user's gallery: build recordings of their projects on the floor of AI agents, opened by the author's link.",
+      ru: "Галерея пользователя Киберзавода: записи сборок его проектов в цехе ИИ-агентов, открывается по ссылке автора.",
     },
     statsTitle: { en: "Analytics", ru: "Аналитика" },
     cabinetTitle: { en: "Your account", ru: "Личный кабинет" },
@@ -134,8 +134,8 @@ export const UI_TEXT = {
       ru: "Ваша галерея Киберзавода: открыть или закрыть её, посмотреть записи сборок и удалить лишние.",
     },
     statsDescription: {
-      en: "Where the process stalls: reworks by stage, human interventions, tokens and build outcomes across open galleries.",
-      ru: "Где процесс буксует: возвраты по этапам, вмешательства человека, токены и исходы сборок по открытым галереям.",
+      en: "Where the process stalls: reworks by stage, human interventions, tokens and build outcomes of the projects the floor built from scratch.",
+      ru: "Где процесс буксует: возвраты по этапам, вмешательства человека, токены и исходы сборок проектов, которые цех собрал с нуля.",
     },
     recordingDescription: {
       en: (title: string) =>
@@ -213,7 +213,7 @@ export const UI_TEXT = {
       ru: (owner: string, project: string) => `${owner} / ${project}`,
     },
   },
-  /** API data on the gallery and analytics pages: why it cannot be shown yet. */
+  /** API data on the gallery page: why it cannot be shown yet. */
   remote: {
     loading: { en: "Loading…", ru: "Загружаем…" },
     broken: {
@@ -225,14 +225,12 @@ export const UI_TEXT = {
       ru: "Не удалось загрузить данные — попробуйте обновить страницу.",
     },
   },
-  /** Galleries: the shared list and an author's gallery with a badge. */
+  /** Galleries: the page without a link to an author, and an author's gallery with a badge. */
   gallery: {
-    listHeading: { en: "Open galleries", ru: "Открытые галереи" },
-    listIntro: {
-      en: "Authors share build recordings from the CLI with cyberzavod share. A gallery is listed here once its author opens it.",
-      ru: "Авторы публикуют записи сборок из CLI командой cyberzavod share. Галерея попадает сюда, когда автор её откроет.",
+    intro: {
+      en: "A gallery opens by its author's link — for example, from the badge in their project's README. There is no shared list of galleries.",
+      ru: "Галерея открывается по ссылке автора — например, с бейджа в README его проекта. Общего списка галерей нет.",
     },
-    noGalleries: { en: "No open galleries yet.", ru: "Открытых галерей пока нет." },
     authorHeading: {
       en: (login: string) => `${login}'s gallery`,
       ru: (login: string) => `Галерея ${login}`,
@@ -242,11 +240,6 @@ export const UI_TEXT = {
       en: "This gallery is private or does not exist.",
       ru: "Эта галерея закрыта или её нет.",
     },
-    updated: {
-      en: (date: string) => `updated ${date}`,
-      ru: (date: string) => `обновлена ${date}`,
-    },
-    allGalleries: { en: "All galleries", ru: "Все галереи" },
     badgeHeading: { en: "Badge for README", ru: "Бейдж для README" },
     badgeHint: {
       en: "Paste this line into your project's README: the badge shows the number of builds and links to this gallery.",
@@ -298,8 +291,8 @@ export const UI_TEXT = {
       ru: "Записи видят только те, у кого есть ссылка.",
     },
     publicHint: {
-      en: "The gallery is in the list of galleries on the site and counts towards the analytics.",
-      ru: "Галерея есть в списке галерей на сайте и входит в аналитику.",
+      en: "The gallery has its own page: anyone with its link can see it, for example from the README badge.",
+      ru: "У галереи есть своя страница: её видит любой, у кого есть ссылка, например с бейджа в README.",
     },
     galleryPage: { en: "Gallery page", ru: "Страница галереи" },
     recordingsHeading: { en: "Recordings", ru: "Записи" },
@@ -332,19 +325,19 @@ export const UI_TEXT = {
       ru: "Перед этим войдите в CLI:",
     },
   },
-  /** Analytics on the recordings of public galleries. */
+  /** Analytics on the site's build recordings. */
   stats: {
     heading: { en: "Build analytics", ru: "Аналитика сборок" },
     intro: {
-      en: "Builds from open galleries: where the process stalls, how many tokens it takes and when a human is called.",
-      ru: "Сборки из открытых галерей: где процесс буксует, сколько уходит токенов и когда зовут человека.",
+      en: "Builds of the projects the floor built from scratch: where the process stalls, how many tokens it takes and when a human is called.",
+      ru: "Сборки проектов, которые цех собрал с нуля: где процесс буксует, сколько уходит токенов и когда зовут человека.",
     },
     empty: {
-      en: "There are no builds in open galleries yet — nothing to count.",
-      ru: "В открытых галереях пока нет сборок — считать нечего.",
+      en: "No builds yet — nothing to count.",
+      ru: "Сборок пока нет — считать нечего.",
     },
     builds: { en: "Builds", ru: "Сборки" },
-    authors: { en: "Authors", ru: "Авторы" },
+    projects: { en: "Projects", ru: "Проекты" },
     returnsHeading: { en: "Reworks by stage", ru: "Возвраты по этапам" },
     interventionsHeading: { en: "Interventions by reason", ru: "Вмешательства по причинам" },
     outcomesHeading: { en: "Build outcomes", ru: "Исходы сборок" },
@@ -406,15 +399,6 @@ export const UI_TEXT = {
     passed: { en: "checks passed", ru: "проверки прошли" },
     failed: { en: "checks failed", ru: "проверки не прошли" },
     link: { en: "Compare runs of this task", ru: "Сравнить прогоны этой задачи" },
-  },
-  /** Galleries: examples (projects the factory built from scratch) above the user galleries. */
-  examples: {
-    heading: { en: "Examples", ru: "Примеры" },
-    intro: {
-      en: "Example projects the floor built from scratch: every build can be watched on the floor.",
-      ru: "Проекты, которые цех собрал с нуля: каждую сборку можно посмотреть в цехе.",
-    },
-    userGalleriesHeading: { en: "User galleries", ru: "Галереи пользователей" },
   },
   /** Factory floor island. */
   factory: {
