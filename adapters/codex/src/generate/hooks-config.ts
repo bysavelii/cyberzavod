@@ -6,6 +6,7 @@ import {
   inPosixShell,
   inspectHooks as inspectKitHooks,
   mergedHooks,
+  NPX_CACHE_FIRST_FLAGS,
   SKIP_ON_FAILURE,
   STOP_GATE_TIMEOUT_SECONDS,
   STOP_STATUS_MESSAGE,
@@ -33,18 +34,18 @@ export const GUARDED_TOOLS = `${SHELL_TOOL}|${PATCH_TOOL}`;
 const GUARD_TIMEOUT_SECONDS = 30;
 
 // Codex starts a hook in the session directory, which may be a subdirectory of the project, and
-// gives it no variable with the project directory (Claude has $CLAUDE_PROJECT_DIR). The project root
-// is where Codex itself looks for `.codex/` first: the nearest `.git` upward, which is what
+// gives it no variable with the project directory (Claude has $CLAUDE_PROJECT_DIR). The project
+// root is where Codex itself looks for `.codex/` first: the nearest `.git` upward, which is what
 // `git rev-parse --show-toplevel` answers. Outside a repository Codex uses the session directory,
-// and so does the fallback `pwd`. --prefer-offline and --fetch-retries=0: a package in the npm cache
-// is taken without contacting the registry, and without network or cache npx fails at once rather
-// than after minutes. The root is the git root, so a project that lives in a subdirectory of a
-// larger repository does not find its local package there and takes it from the npm cache.
+// and so does the fallback `pwd`. The npx cache-first flags (see `NPX_CACHE_FIRST_FLAGS`) take a
+// package from the npm cache without contacting the registry. The root is the git root, so a
+// project that lives in a subdirectory of a larger repository does not find its local package
+// there and takes it from the npm cache.
 //
 // Codex runs a hook as `$SHELL -lc <command>`, and fish before 3.4 and tcsh do not read `$(…)` or
 // `||`: the command goes through `sh -c` (see `inPosixShell`) and works in any login shell.
 const PROJECT_ROOT_COMMAND = "$(git rev-parse --show-toplevel 2>/dev/null || pwd)";
-const HOOK_RUNNER = `npx -y --prefer-offline --fetch-retries=0 --prefix "${PROJECT_ROOT_COMMAND}"`;
+const HOOK_RUNNER = `npx ${NPX_CACHE_FIRST_FLAGS} --prefix "${PROJECT_ROOT_COMMAND}"`;
 
 /**
  * Adapter error from a diagnostic of malformed hooks: the format text, framed by the catalog.

@@ -1,0 +1,56 @@
+/* The same game screen as GameLayout on the site: the floor fills the window, the menu is on the
+   left, the panels slide over the floor. */
+.viewer {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  gap: var(--gutter);
+  height: 100dvh;
+  padding: var(--gutter);
+}
+
+/* Above the speech bubbles (z-index 2 in Factory.module.css): a bubble must not cover the menu. */
+.menu {
+  position: relative;
+  z-index: 3;
+  padding: var(--space-m) var(--space-s);
+  overflow-y: auto;
+  background: var(--paper);
+  border: var(--outline);
+  border-radius: var(--radius-l);
+  box-shadow: var(--lift-large);
+}
+
+.tiles {
+  display: grid;
+  gap: var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.field {
+  display: grid;
+  min-height: 0;
+}
+
+/* On a narrow screen the menu is a row at the top, as on the site. */
+@media (width <= 48rem) and (height > 40rem) {
+  .viewer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .menu {
+    padding: var(--space-xs) var(--space-2xs);
+  }
+
+  .tiles {
+    display: flex;
+    gap: var(--space-2xs);
+  }
+
+  .tiles li {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}

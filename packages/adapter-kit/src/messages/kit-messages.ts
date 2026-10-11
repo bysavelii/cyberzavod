@@ -1,5 +1,6 @@
 // Texts the adapters share, for the human and the agent: the stop hook (the agent reads its message
-// as a task), the capture hook, drafting and publishing recordings, and errors of the shared code.
+// as a task), the capture hook, drafting, previewing and publishing recordings, and errors of the
+// shared code.
 // A value is a string or a function; with two or more parameters, one object with named fields.
 // The sets live in `en.ts` and `ru.ts`; the CLI picks the language.
 
@@ -71,6 +72,14 @@ export interface PublishMessages {
   costUnknown(reason: UnknownCostReason): string;
 }
 
+/** Texts of previewing drafts as recordings. */
+export interface PreviewMessages {
+  /** Title of a build the editor has not titled yet. */
+  untitled(buildId: string): string;
+  /** A draft or a build that cannot be shown; the file is relative to the project. */
+  skipped(params: { file: string; buildId?: string; reason: string }): string;
+}
+
 /** Texts of errors that come from generating agent files and from recordings, the same for every agent. */
 export interface KitErrorMessages {
   fileConflicts(files: string): string;
@@ -94,6 +103,7 @@ export interface KitMessages {
   record: RecordMessages;
   draft: DraftMessages;
   publish: PublishMessages;
+  preview: PreviewMessages;
   errors: KitErrorMessages;
   /** Names of the kinds of content that must not be published: for the leak message. */
   leakKinds: Readonly<Record<LeakKind, string>>;

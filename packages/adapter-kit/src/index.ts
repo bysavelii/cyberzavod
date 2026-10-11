@@ -1,7 +1,12 @@
 // Shared code of the agent adapters: ownership of generated files, hooks files, the manifest,
 // templates and the texts both agents use. It knows no agent by name; each adapter builds on it.
 
-export { CLI_COMMAND, PACKAGE_NAME, pinnedCliCommand } from "./cli-command.ts";
+export {
+  CLI_COMMAND,
+  NPX_CACHE_FIRST_FLAGS,
+  PACKAGE_NAME,
+  pinnedCliCommand,
+} from "./cli-command.ts";
 export { KitError } from "./errors.ts";
 export {
   MAX_COMMAND_LENGTH,
@@ -83,6 +88,11 @@ export {
   type DraftSessionOptions,
   type SessionCapture,
 } from "./commands/draft.ts";
+export {
+  previewDrafts,
+  type AgentPreviewOptions,
+  type PreviewDraftsOptions,
+} from "./commands/preview.ts";
 export {
   publishSessions,
   type AgentPublishOptions,
@@ -189,6 +199,7 @@ export type {
   DraftMessages,
   KitErrorMessages,
   KitMessages,
+  PreviewMessages,
   PublishMessages,
   RecordMessages,
   StopMessages,

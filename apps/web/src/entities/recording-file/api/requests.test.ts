@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SessionRecord } from "@cyberzavod/core";
 import { ApiRequestError } from "@/shared/api/errors.ts";
 import type { ApiRequest } from "@/shared/api/http.ts";
-import { fetchRecording } from "./requests.ts";
+import { fetchLocalRecordings, fetchRecording } from "./requests.ts";
 
 function validSession(): SessionRecord {
   return {
@@ -52,6 +52,28 @@ describe("fetchRecording", () => {
     const { request } = respondWith("<!doctype html>", 404);
 
     const act = fetchRecording("missing", request);
+
+    await expect(act).rejects.toBeInstanceOf(ApiRequestError);
+  });
+});
+
+describe("fetchLocalRecordings", () => {
+  it("спрашивает список у локального сервера и разбирает записи", async () => {
+    const body = { published: [validSession()], drafts: [] };
+    const { request, paths } = respondWith(JSON.stringify(body), 200);
+
+    const recordings = await fetchLocalRecordings(request);
+
+    expect({ ids: recordings.published.map(({ id }) => id), paths }).toEqual({
+      ids: ["2026-10-07-aa4e0a7d"],
+      paths: ["/api/recordings"],
+    });
+  });
+
+  it("бросает ошибку со статусом, когда сервер не смог прочитать журнал", async () => {
+    const { request } = respondWith(JSON.stringify({ error: "journal_broken" }), 500);
+
+    const act = fetchLocalRecordings(request);
 
     await expect(act).rejects.toBeInstanceOf(ApiRequestError);
   });

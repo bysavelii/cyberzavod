@@ -15,3 +15,10 @@ export const CLI_COMMAND = `npx ${PACKAGE_NAME}`;
 export function pinnedCliCommand(version: string): string {
   return `${CLI_COMMAND}@${version}`;
 }
+
+/**
+ * npx flags that take a package from the npm cache without contacting the registry and, without
+ * network or cache, fail at once rather than after minutes. `-y` skips the install prompt. The
+ * hooks and the viewer launch use them.
+ */
+export const NPX_CACHE_FIRST_FLAGS = "-y --prefer-offline --fetch-retries=0";

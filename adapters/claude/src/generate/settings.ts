@@ -7,6 +7,7 @@ import {
   inspectHooks as inspectKitHooks,
   isObject,
   mergedHooks,
+  NPX_CACHE_FIRST_FLAGS,
   SettingsError,
   SKIP_ON_FAILURE,
   STOP_GATE_TIMEOUT_SECONDS,
@@ -44,12 +45,11 @@ export const ADAPTER_DENY = [
   "Edit(**/capture/claude/raw/**)",
 ] as const;
 
-// --prefer-offline and --fetch-retries=0: a package in the npm cache is taken without contacting
-// the registry, and without network or cache npx fails at once rather than after minutes. --prefix
-// is $CLAUDE_PROJECT_DIR, not the current directory (the session may have run cd), so the package
-// in the project's node_modules is found from any subdirectory. The quotes allow spaces in the
-// path.
-const HOOK_RUNNER = 'npx -y --prefer-offline --fetch-retries=0 --prefix "$CLAUDE_PROJECT_DIR"';
+// The npx cache-first flags (see `NPX_CACHE_FIRST_FLAGS`) take a package from the npm cache without
+// contacting the registry. --prefix is $CLAUDE_PROJECT_DIR, not the current directory (the session
+// may have run cd), so the package in the project's node_modules is found from any subdirectory.
+// The quotes allow spaces in the path.
+const HOOK_RUNNER = `npx ${NPX_CACHE_FIRST_FLAGS} --prefix "$CLAUDE_PROJECT_DIR"`;
 
 // On Windows Claude Code runs hooks through Git Bash; PowerShell is not supported.
 function commandOf(version: string, hook: HookName, onFailure: string): string {

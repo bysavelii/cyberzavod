@@ -18,6 +18,8 @@ export const QUERY_PARAMS = {
   recording: "id",
   /** Login of the public gallery's author: `/gallery/?user=<login>`. */
   galleryOwner: "user",
+  /** Interface language of the `cyberzavod view` page, a site language code: `/?lang=ru`. */
+  language: "lang",
 } as const;
 
 // A gallery or a recording is visible only by its link, and each author has their own account

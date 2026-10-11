@@ -854,26 +854,41 @@ function checkNoLeaks({ data }: SessionRecord, buildId: string): void {
 }
 
 /**
- * Turns one build of an edited draft into a recording for the site: only events of
- * this build, time from its first event and without long pauses, without the original texts of
- * prompts and messages, without the original texts of interventions, without `project` and `run`
- * tags, without merged prompts and draft service events. Token `usage` events stay at their places
- * with the model and the breakdown: they are not summed.
- * @param {Draft} draft Draft with the title, project, harness version,
- *   clean prompts and messages of the published build filled in.
- * @param {string} buildId Id of the published build.
+ * The events that belong to one build, in draft order, by the ownership rules of `eventBuilds`.
+ * @param {Draft} draft Draft with at least one build.
+ * @param {string} buildId Id of the build.
+ * @returns {DraftEvent[]} Events of the build.
+ */
+export function eventsOfBuild(draft: Draft, buildId: string): DraftEvent[] {
+  const owners = eventBuilds(draft);
+
+  return draft.events.filter((_event, index) => owners[index] === buildId);
+}
+
+/**
+ * Turns the given events of one build into a recording: time from its first event and without long
+ * pauses, without the original texts of prompts and messages, without the original texts of
+ * interventions, without `project` and `run` tags, without merged prompts and draft service events.
+ * Token `usage` events stay at their places with the model and the breakdown: they are not summed.
+ * The text is not checked for leaks. It is `recordOfBuild` with the choice of events left to the
+ * caller, for a caller that has to change them after the build ownership is known.
+ * @param {Draft} draft Draft whose build header and start time the recording takes.
+ * @param {string} buildId Id of the build.
+ * @param {readonly DraftEvent[]} events Events of the build: `eventsOfBuild` or derived from it.
  * @param {RecordSource} source Who made the build: the agent that ran the session.
  * @returns {SessionRecord} Recording with the build `id` that passed the core format check.
  * @throws {RecordError} If the title, project, harness version, a clean prompt or a message
  *   of the build is empty or the recording does not match the core format.
  * @throws {DraftError} If there is no such build or a merged prompt has no preceding unmerged one.
- * @throws {KitError} If the build has no events or the text to publish looks like an address,
- *   a key or a personal path.
+ * @throws {KitError} If the build has no events.
  */
-export function publishBuild(draft: Draft, buildId: string, source: RecordSource): SessionRecord {
+export function recordOfEvents(
+  draft: Draft,
+  buildId: string,
+  events: readonly DraftEvent[],
+  source: RecordSource,
+): SessionRecord {
   const build = buildOf(draft, buildId);
-  const owners = eventBuilds(draft);
-  const events = draft.events.filter((_event, index) => owners[index] === buildId);
   const timeline = buildTimeline(events);
 
   if (timeline === undefined) {
@@ -905,6 +920,46 @@ export function publishBuild(draft: Draft, buildId: string, source: RecordSource
   if (record.type !== "session") {
     throw new DraftError(`build ${buildId} was not published as a session`);
   }
+
+  return record;
+}
+
+/**
+ * Turns one build of a draft into a recording: only events of this build, time from its first
+ * event and without long pauses, without the original texts of prompts and messages, without the
+ * original texts of interventions, without `project` and `run` tags, without merged prompts and
+ * draft service events. Token `usage` events stay at their places with the model and the
+ * breakdown: they are not summed. The text is not checked for leaks: `publishBuild` does that.
+ * @param {Draft} draft Draft with the title, project, harness version, clean prompts and messages
+ *   of the build filled in.
+ * @param {string} buildId Id of the build.
+ * @param {RecordSource} source Who made the build: the agent that ran the session.
+ * @returns {SessionRecord} Recording with the build `id` that passed the core format check.
+ * @throws {RecordError} If the title, project, harness version, a clean prompt or a message
+ *   of the build is empty or the recording does not match the core format.
+ * @throws {DraftError} If there is no such build or a merged prompt has no preceding unmerged one.
+ * @throws {KitError} If the build has no events.
+ */
+export function recordOfBuild(draft: Draft, buildId: string, source: RecordSource): SessionRecord {
+  return recordOfEvents(draft, buildId, eventsOfBuild(draft, buildId), source);
+}
+
+/**
+ * Turns one build of an edited draft into a recording for the site: `recordOfBuild` plus the check
+ * that no address, key or personal path is left in the texts to publish.
+ * @param {Draft} draft Draft with the title, project, harness version,
+ *   clean prompts and messages of the published build filled in.
+ * @param {string} buildId Id of the published build.
+ * @param {RecordSource} source Who made the build: the agent that ran the session.
+ * @returns {SessionRecord} Recording with the build `id` that passed the core format check.
+ * @throws {RecordError} If the title, project, harness version, a clean prompt or a message
+ *   of the build is empty or the recording does not match the core format.
+ * @throws {DraftError} If there is no such build or a merged prompt has no preceding unmerged one.
+ * @throws {KitError} If the build has no events or the text to publish looks like an address,
+ *   a key or a personal path.
+ */
+export function publishBuild(draft: Draft, buildId: string, source: RecordSource): SessionRecord {
+  const record = recordOfBuild(draft, buildId, source);
 
   checkNoLeaks(record, buildId);
 

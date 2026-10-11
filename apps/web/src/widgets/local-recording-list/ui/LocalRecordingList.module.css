@@ -1,0 +1,39 @@
+.groups,
+.list {
+  display: grid;
+  gap: var(--space-m);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.groups {
+  gap: var(--space-l);
+}
+
+.heading {
+  margin: 0 0 var(--space-s);
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.entry {
+  display: grid;
+  gap: var(--space-s);
+  justify-items: start;
+}
+
+/* A long title wraps at the start of the line, not in the middle, as the button would center it. */
+.choose {
+  text-align: start;
+}
+
+.note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-s);
+  align-items: center;
+  margin: 0;
+  color: var(--ink-soft);
+  font-weight: 700;
+}

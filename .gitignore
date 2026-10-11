@@ -2,6 +2,8 @@ node_modules/
 dist/
 # Copy of the root LICENSE for the npm package, made by prepack
 /packages/cli/LICENSE
+# The same for the factory floor package
+/packages/viewer/LICENSE
 .DS_Store
 .env
 *.log

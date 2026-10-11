@@ -15,6 +15,7 @@
     "smoke": "node packages/cli/scripts/smoke.ts"
   },
   "devDependencies": {
+    "@cyberzavod/viewer": "workspace:*",
     "@eslint/js": "^10.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "^24.19.1",
