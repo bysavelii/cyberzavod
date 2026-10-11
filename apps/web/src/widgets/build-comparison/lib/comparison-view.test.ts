@@ -118,9 +118,35 @@ describe("comparisonColumnOf", () => {
     expect(column.counters).toEqual([
       { label: "Time", value: "2 min 05 s" },
       { label: "Tokens", value: "500" },
+      { label: "Cost", value: "unknown" },
       { label: "Reworks", value: "0" },
       { label: "Outcome", value: "checks passed" },
     ]);
+  });
+
+  it("показывает стоимость записи по ценам модели", () => {
+    const recording = recordingWith([
+      enter("planning", 10, "claude-opus-5-5"),
+      {
+        t: 30,
+        type: "usage",
+        tokens: 1_000_000,
+        model: "claude-opus-5-5",
+        breakdown: { input: 1_000_000, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0 },
+      },
+    ]);
+
+    const column = comparisonColumnOf(recording, "en");
+
+    expect(column.counters).toContainEqual({ label: "Cost", value: "$4.00" });
+  });
+
+  it("пишет «неизвестна», если стоимость записи не посчитать", () => {
+    const recording = recordingWith([{ t: 30, type: "usage", tokens: 500 }]);
+
+    const column = comparisonColumnOf(recording, "ru");
+
+    expect(column.counters).toContainEqual({ label: "Стоимость", value: "неизвестна" });
   });
 
   it("пишет, что проверки не прошли, если сборка закончилась неудачей", () => {
@@ -140,7 +166,7 @@ describe("comparisonColumnOf", () => {
 
     const column = comparisonColumnOf(recording, "ru");
 
-    expect(column.counters[2]).toEqual({
+    expect(column.counters[3]).toEqual({
       label: "Возвраты",
       value: "3",
       detail: "Ревью 2 · Проверки 1",

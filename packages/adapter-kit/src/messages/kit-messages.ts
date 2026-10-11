@@ -3,7 +3,7 @@
 // A value is a string or a function; with two or more parameters, one object with named fields.
 // The sets live in `en.ts` and `ru.ts`; the CLI picks the language.
 
-import type { InterventionReason } from "@cyberzavod/core";
+import type { InterventionReason, UnknownCostReason } from "@cyberzavod/core";
 import type { HeaderField } from "../capture/draft.ts";
 import type { LeakKind } from "../capture/leaks.ts";
 
@@ -65,6 +65,10 @@ export interface PublishMessages {
   published(file: string): string;
   notReady(params: { file: string; problems: string }): string;
   buildProblem(params: { buildId: string; reason: string }): string;
+  /** Cost of a published recording at API prices; `pricesAsOf` is the day the prices were checked. */
+  cost(params: { usd: number; pricesAsOf: string }): string;
+  /** Why the cost of a published recording cannot be told. */
+  costUnknown(reason: UnknownCostReason): string;
 }
 
 /** Texts of errors that come from generating agent files and from recordings, the same for every agent. */

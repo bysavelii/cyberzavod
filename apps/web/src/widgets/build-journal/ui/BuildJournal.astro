@@ -7,7 +7,7 @@
 // creates islands, so the list is assembled here, while the entry body, header and styles are
 // shared with `JournalTimeline`, the journal of a recording from the API. Above the list stands
 // what the process caught: the reworks of the recording, and, if the task has other runs, a link to
-// their comparison.
+// their comparison; under it, what the recording cost, if that can be told.
 import type { SessionRecord } from "@cyberzavod/core";
 import type { Locale } from "@/shared/i18n/locale.ts";
 import { UI_TEXT } from "@/shared/i18n/ui-text.ts";
@@ -16,6 +16,7 @@ import { ButtonLink, Title } from "@/shared/ui";
 import { headerOf, timelineOf } from "../lib/timeline.ts";
 import { EntryBody } from "./EntryBody.tsx";
 import { JournalEntry } from "./JournalEntry.tsx";
+import CostSummary from "./CostSummary.astro";
 import ReworkSummary from "./ReworkSummary.astro";
 import styles from "./Timeline.module.css";
 
@@ -45,6 +46,8 @@ const languageNote = languageNoteOf(language, locale);
 )}
 
 <ReworkSummary recording={recording} locale={locale} />
+
+<CostSummary recording={recording} locale={locale} />
 
 <Title as="h3" class={styles.heading}>
   {UI_TEXT.journal.timelineHeading[locale]}

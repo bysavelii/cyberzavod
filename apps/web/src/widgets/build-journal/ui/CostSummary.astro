@@ -1,0 +1,41 @@
+---
+// What the recording cost in dollars at API prices: the total and the stages it consists of.
+// Static markup without an island: the recording is known at site build time. A recording whose
+// cost cannot be told (made before the token breakdown) has no block.
+import type { SessionRecord } from "@cyberzavod/core";
+import type { Locale } from "@/shared/i18n/locale.ts";
+import { UI_TEXT } from "@/shared/i18n/ui-text.ts";
+import { StatList, Title } from "@/shared/ui";
+import { costViewOf } from "../lib/cost-view.ts";
+
+interface Props {
+  /** The recording whose cost is shown. */
+  recording: SessionRecord;
+  /** Page language: headings, amounts and the note are in it. */
+  locale: Locale;
+}
+
+const { recording, locale } = Astro.props;
+const view = costViewOf(recording, locale);
+---
+
+{view !== undefined && (
+  <section class="summary">
+    <Title as="h3">{UI_TEXT.cost.heading[locale]}</Title>
+    <StatList items={view.items} />
+    <p class="note">{view.note}</p>
+  </section>
+)}
+
+<style>
+  .summary {
+    display: grid;
+    gap: var(--space-s);
+    margin-top: var(--space-l);
+  }
+
+  .note {
+    margin: 0;
+    color: var(--ink-soft);
+  }
+</style>

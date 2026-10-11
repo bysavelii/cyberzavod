@@ -27,7 +27,7 @@ Cyberzavod — локальный, независимый от модели harn
 
 Монорепозиторий: pnpm workspaces для TypeScript, отдельный Go-модуль для API. Зависимости направлены к ядру: адаптеры и CLI знают о ядре и хранилище, адаптеры — ещё об общей части `packages/adapter-kit`, ядро — ни о ком.
 
-- `packages/core` — модель на чистом TypeScript: записи журнала (конверт `{version, type, timestamp, projectId, sessionId, source, data}`, типы `session`, `decision`, `note`), конфиг проекта, этапы и процесс, harness, счётчики.
+- `packages/core` — модель на чистом TypeScript: записи журнала (конверт `{version, type, timestamp, projectId, sessionId, source, data}`, типы `session`, `decision`, `note`), конфиг проекта, этапы и процесс, harness, счётчики, цены моделей и стоимость записи.
 - `packages/player` — проигрыватель цеха: сценарий из записи и кадр в любой момент. Только для сайта; в npm-пакет инструмента не входит.
 - `packages/storage` — диск: чтение конфига проекта, `DirectoryRecordStore` (журнал как каталог файлов), загрузка harness. Одно хранилище для CLI, адаптера и сайта.
 - `packages/cli` — npm-пакет `cyberzavod`: `init [--agent claude|codex]` с распознаванием проекта и одним подтверждением, `sync`, `doctor` (проверка подключения с подсказками, как починить), `status`, записи решений и заметок; сообщения на английском и русском; `draft` и `publish` передаёт адаптеру проекта, `hook` — адаптеру из флага `--agent` (по умолчанию `claude`); `login`, `share`, `unshare` и `gallery` — вход через GitHub и личная галерея записей на сайте (не больше 5 записей, по умолчанию закрыта). `scripts/build.ts` собирает всё в `dist/cyberzavod.mjs` без зависимостей.

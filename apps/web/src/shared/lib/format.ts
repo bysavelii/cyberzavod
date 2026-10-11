@@ -96,6 +96,35 @@ export function formatTokens(tokens: number, locale: Locale): string {
   return formatNumber(tokens, locale);
 }
 
+const COST_FRACTION_DIGITS = 2;
+const CENT_USD = 0.01;
+const COST_FORMATTERS = byLocale(
+  (locale) =>
+    new Intl.NumberFormat(LOCALE_TAGS[locale], {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: COST_FRACTION_DIGITS,
+      maximumFractionDigits: COST_FRACTION_DIGITS,
+    }),
+);
+
+/**
+ * Formats a cost in dollars with a cent precision. A positive cost under a cent is shown as
+ * "under a cent", so a small cost does not look like nothing.
+ * @param {number} usd Amount in US dollars.
+ * @param {Locale} locale Language whose rules write the number and the currency sign.
+ * @returns {string} A string like "$1.80"; in Russian «1,80 $»; «< $0.01» for 0.003.
+ */
+export function formatCost(usd: number, locale: Locale): string {
+  const formatter = COST_FORMATTERS[locale];
+
+  if (usd > 0 && usd < CENT_USD) {
+    return UI_TEXT.cost.underCent[locale](formatter.format(CENT_USD));
+  }
+
+  return formatter.format(usd);
+}
+
 // Pages are built ahead of time without the viewer's time zone, so the day is in UTC, as in the
 // recording id.
 const DATE_FORMATTERS = byLocale(

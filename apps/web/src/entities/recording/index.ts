@@ -17,3 +17,10 @@ export {
   type RecordingTotals,
   type SummedCount,
 } from "./model/totals.ts";
+export {
+  averageCostOf,
+  costOfRecording,
+  costTotalsOf,
+  usdOfCost,
+  type RecordingCostTotals,
+} from "./model/costs.ts";

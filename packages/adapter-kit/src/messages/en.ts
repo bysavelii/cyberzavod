@@ -2,6 +2,7 @@
 
 import { CLI_COMMAND } from "../cli-command.ts";
 import type { KitMessages } from "./kit-messages.ts";
+import { formatUsd } from "./money.ts";
 
 /** Shared adapter texts in English. */
 export const en: KitMessages = {
@@ -57,6 +58,20 @@ export const en: KitMessages = {
     published: (file) => `published: ${file}`,
     notReady: ({ file, problems }) => `${file} is not ready to publish:\n${problems}`,
     buildProblem: ({ buildId, reason }) => `build ${buildId}: ${reason}`,
+    cost: ({ usd, pricesAsOf }) =>
+      `cost at API prices: ${formatUsd(usd)} (prices of ${pricesAsOf})`,
+    costUnknown: (reason) => {
+      switch (reason.type) {
+        case "no_usage":
+          return "cost unknown: the recording has no token usage";
+        case "no_breakdown":
+          return "cost unknown: the tokens are not broken down by kind";
+        case "no_model":
+          return "cost unknown: the model that spent the tokens is not recorded";
+        case "unpriced_model":
+          return `cost unknown: no price for model ${reason.model}`;
+      }
+    },
   },
   errors: {
     fileConflicts: (files) =>

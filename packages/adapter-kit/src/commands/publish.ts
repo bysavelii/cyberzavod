@@ -5,7 +5,14 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { RecordError, type RecordSource, type SessionRecord } from "@cyberzavod/core";
+import {
+  briefOf,
+  costOf,
+  PRICES_AS_OF,
+  RecordError,
+  type RecordSource,
+  type SessionRecord,
+} from "@cyberzavod/core";
 import { DirectoryRecordStore } from "@cyberzavod/storage";
 import { DraftError, parseDraft, publishBuild, type Draft } from "../capture/draft.ts";
 import { KitError } from "../errors.ts";
@@ -54,6 +61,17 @@ function publishBuildOrProblem(
     if (!isPublishProblem(err)) throw err;
 
     return messages.publish.buildProblem({ buildId, reason: problemText(err, messages) });
+  }
+}
+
+function costLine(record: SessionRecord, messages: KitMessages): string {
+  const { total } = costOf(briefOf(record));
+
+  switch (total.kind) {
+    case "known":
+      return messages.publish.cost({ usd: total.usd, pricesAsOf: PRICES_AS_OF });
+    case "unknown":
+      return messages.publish.costUnknown(total.reason);
   }
 }
 
@@ -110,6 +128,7 @@ export async function publishSessions(options: PublishSessionsOptions): Promise<
     for (const record of publishSelected(draft, options)) {
       await store.write(record);
       console.log(messages.publish.published(shown(store.pathOf(record))));
+      console.log(costLine(record, messages));
     }
 
     return true;

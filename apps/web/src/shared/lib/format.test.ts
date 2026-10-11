@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatClock,
+  formatCost,
   formatCount,
   formatDate,
   formatDuration,
@@ -187,5 +188,43 @@ describe("formatLanguage", () => {
     const name = formatLanguage("qaa", "en");
 
     expect(name).toMatch(/qaa/i);
+  });
+});
+
+describe("formatCost", () => {
+  it.each([
+    ["en", "$1.80"],
+    ["ru", "1,80\u00a0$"],
+  ] as const)("пишет доллары с двумя знаками после запятой (%s)", (locale, expected) => {
+    const result = formatCost(1.8, locale);
+
+    expect(result).toBe(expected);
+  });
+
+  it.each([
+    ["en", "$1,234.57"],
+    ["ru", "1\u00a0234,57\u00a0$"],
+  ] as const)("группирует разряды (%s)", (locale, expected) => {
+    const result = formatCost(1234.567, locale);
+
+    expect(result).toBe(expected);
+  });
+
+  it.each([
+    ["en", "< $0.01"],
+    ["ru", "< 0,01\u00a0$"],
+  ] as const)(
+    "пишет «меньше цента», если сумма положительна, но меньше цента (%s)",
+    (locale, expected) => {
+      const result = formatCost(0.003, locale);
+
+      expect(result).toBe(expected);
+    },
+  );
+
+  it("пишет ноль как $0.00, а не «меньше цента»", () => {
+    const result = formatCost(0, "en");
+
+    expect(result).toBe("$0.00");
   });
 });

@@ -340,6 +340,16 @@ export const UI_TEXT = {
     },
     builds: { en: "Builds", ru: "Сборки" },
     projects: { en: "Projects", ru: "Проекты" },
+    averageCost: { en: "Average build cost", ru: "Средняя стоимость сборки" },
+    // "по 3 из 7 сборок": `builds` is the count with its word in the genitive (`coveredBuilds`).
+    costCoverage: {
+      en: (withCost: string, builds: string) => `over ${withCost} of ${builds}`,
+      ru: (withCost: string, builds: string) => `по ${withCost} из ${builds}`,
+    },
+    coveredBuilds: {
+      en: { one: "build", other: "builds" },
+      ru: { one: "сборки", few: "сборок", many: "сборок" },
+    },
     returnsHeading: { en: "Reworks by stage", ru: "Возвраты по этапам" },
     interventionsHeading: { en: "Interventions by reason", ru: "Вмешательства по причинам" },
     outcomesHeading: { en: "Build outcomes", ru: "Исходы сборок" },
@@ -382,6 +392,23 @@ export const UI_TEXT = {
       ru: (clean: number, builds: number) => `${clean} из ${builds}`,
     },
   },
+  /**
+   * Cost of a recording in dollars at API prices: the block on the recording page and the amounts
+   * everywhere. A subscription is billed differently, so the texts do not say the human paid it.
+   */
+  cost: {
+    heading: { en: "Cost", ru: "Стоимость" },
+    total: { en: "Total", ru: "Итого" },
+    beforeStages: { en: "Before the first stage", ru: "До первого этапа" },
+    note: {
+      en: (date: string) => `At API prices as of ${date}; a subscription is billed differently.`,
+      ru: (date: string) => `По ценам API на ${date}; подписка оплачивается иначе.`,
+    },
+    underCent: {
+      en: (amount: string) => `< ${amount}`,
+      ru: (amount: string) => `< ${amount}`,
+    },
+  },
   /** Comparison of runs of one task: the page and the link to it from a recording. */
   comparison: {
     heading: { en: "One task, different models", ru: "Одна задача, разные модели" },
@@ -397,6 +424,8 @@ export const UI_TEXT = {
     manual: { en: "by hand", ru: "вручную" },
     stagesHeading: { en: "Models by stage", ru: "Модели по этапам" },
     unknownModel: { en: "model unknown", ru: "модель неизвестна" },
+    cost: { en: "Cost", ru: "Стоимость" },
+    unknownCost: { en: "unknown", ru: "неизвестна" },
     outcome: { en: "Outcome", ru: "Итог" },
     passed: { en: "checks passed", ru: "проверки прошли" },
     failed: { en: "checks failed", ru: "проверки не прошли" },

@@ -1,10 +1,16 @@
 import { stageModelsOf, summarize, type SessionRecord, type StageModels } from "@cyberzavod/core";
-import { recordingUrl, reworksByStageOf, stageReworksDetailOf } from "@/entities/recording";
+import {
+  costOfRecording,
+  recordingUrl,
+  reworksByStageOf,
+  stageReworksDetailOf,
+} from "@/entities/recording";
 import { AGENT_NAMES } from "@/shared/config/agents.ts";
 import { STAGE_LABELS } from "@/shared/config/stages.ts";
 import type { Locale } from "@/shared/i18n/locale.ts";
 import { UI_TEXT } from "@/shared/i18n/ui-text.ts";
 import {
+  formatCost,
   formatDate,
   formatDuration,
   formatModel,
@@ -63,6 +69,15 @@ function reworksItemOf(recording: SessionRecord, reworks: number, locale: Locale
   };
 }
 
+function costItemOf(recording: SessionRecord, locale: Locale): StatItem {
+  const usd = costOfRecording(recording);
+
+  return {
+    label: TEXT.cost[locale],
+    value: usd === undefined ? TEXT.unknownCost[locale] : formatCost(usd, locale),
+  };
+}
+
 function outcomeItemOf(ok: boolean, locale: Locale): StatItem {
   return {
     label: TEXT.outcome[locale],
@@ -92,6 +107,7 @@ export function comparisonColumnOf(recording: SessionRecord, locale: Locale): Co
     counters: [
       { label: UI_TEXT.hud.time[locale], value: formatDuration(stats.durationMs, locale) },
       { label: UI_TEXT.hud.tokens[locale], value: formatTokens(stats.tokens, locale) },
+      costItemOf(recording, locale),
       reworksItemOf(recording, stats.reworks, locale),
       outcomeItemOf(stats.ok, locale),
     ],
