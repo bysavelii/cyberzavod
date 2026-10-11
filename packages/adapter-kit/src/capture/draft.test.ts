@@ -14,6 +14,7 @@ import {
   orphanedRuns,
   parseDraft,
   publishBuild,
+  recordOfBuild,
   publishDraft,
   reroutedMessages,
   unfilledHeader,
@@ -1247,6 +1248,30 @@ describe("publishBuild", () => {
 
     expect(unknown).toThrow(/no build no-such-build/);
     expect(empty).toThrow(/build empty has no events/);
+  });
+});
+
+describe("recordOfBuild", () => {
+  it("собирает запись с адресом в тексте: утечки проверяет publishBuild, а не она", () => {
+    const draft = editedDraft();
+
+    draft.events.push(intervention({ t: 2_500, text: "Зайди на 203.0.113.7" }));
+
+    const record = recordOfBuild(draft, BUILD_ID, SOURCE);
+    const act = () => publishBuild(draft, BUILD_ID, SOURCE);
+
+    expect(record.data.events).toContainEqual(
+      expect.objectContaining({ type: "intervention", text: "Зайди на 203.0.113.7" }),
+    );
+    expect(act).toThrow(/IP address/);
+  });
+
+  it("совпадает с публикацией, когда в тексте утечек нет", () => {
+    const draft = editedDraft();
+
+    const record = recordOfBuild(draft, BUILD_ID, SOURCE);
+
+    expect(record).toEqual(publishBuild(draft, BUILD_ID, SOURCE));
   });
 });
 

@@ -2,6 +2,7 @@
 // publishing recordings from a draft. What the agents share lives in `@cyberzavod/adapter-kit`.
 
 export { draftSession, type DraftSessionOptions } from "./commands/draft.ts";
+export { previewDrafts, type PreviewDraftsOptions } from "./commands/preview.ts";
 export { publishSessions, type PublishSessionsOptions } from "./commands/publish.ts";
 export { ClaudeError } from "./errors.ts";
 export { CLAUDE_MESSAGES } from "./messages/catalog.ts";

@@ -73,6 +73,11 @@ export const ru: KitMessages = {
       }
     },
   },
+  preview: {
+    untitled: (buildId) => `Черновик ${buildId}`,
+    skipped: ({ file, buildId, reason }) =>
+      `не показано: ${file}${buildId === undefined ? "" : `, сборка ${buildId}`}: ${reason}`,
+  },
   errors: {
     fileConflicts: (files) =>
       `ничего не изменено: эти файлы ваши (написаны не генератором или исправлены руками после генерации): ${files}. Перенесите правки в AGENTS.md и удалите файлы или перезапишите их командой ${CLI_COMMAND} sync --force`,

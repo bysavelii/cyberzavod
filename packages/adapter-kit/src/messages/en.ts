@@ -73,6 +73,11 @@ export const en: KitMessages = {
       }
     },
   },
+  preview: {
+    untitled: (buildId) => `Draft ${buildId}`,
+    skipped: ({ file, buildId, reason }) =>
+      `not shown: ${file}${buildId === undefined ? "" : `, build ${buildId}`}: ${reason}`,
+  },
   errors: {
     fileConflicts: (files) =>
       `nothing was changed: these files are yours (not generated, or generated and then edited by hand): ${files}. Move your edits to AGENTS.md and delete the files, or overwrite them with ${CLI_COMMAND} sync --force`,
