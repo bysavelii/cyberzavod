@@ -12,6 +12,7 @@ You need Node 22+, git and Claude Code or Codex CLI. The project must be a git r
 2. Open the agent in the project **after** `init` and run `/setup` (Codex: `$setup`). It fills in `AGENTS.md` from your repository and runs the checks once. Commit the files it changed.
 3. `/feature "Add dark mode"` (Codex: `$feature "Add dark mode"`). The task goes through the stages: plan, code, review, verify, record. You approve the plan; at the end you get commits.
 4. Optionally, `/publish-recording` (Codex: `$publish-recording`) in the same session. It turns the session into a recording and, with your consent, sends it to your gallery on [cyberzavod.com](https://cyberzavod.com).
+5. `npx cyberzavod view` shows your recordings and session drafts on the factory floor in the browser. It serves them from your machine only (`127.0.0.1`) and changes nothing in the project. The first run downloads the viewer package `@cyberzavod/viewer` into the npx cache; after that it needs no network.
 
 Codex runs a project's hooks and roles only for a project you trust. `init` asks one confirmation and then marks the project trusted and its hooks approved in your own Codex config (`$CODEX_HOME/config.toml`, by default `~/.codex/config.toml`), never in the project; `disconnect` takes back only what `init` added. The hook commands are POSIX shell, so on Windows run Codex in WSL.
 
@@ -19,6 +20,6 @@ If something doesn't work, run `npx cyberzavod doctor`: it checks the setup and 
 
 ## Privacy
 
-Cyberzavod is local-first. Nothing is shared unless you explicitly use sharing or publishing functionality: only the gallery commands (`login`, `share`, `unshare`, `gallery`) use the network. `init`, `sync`, `status`, `doctor` and the hooks send nothing anywhere.
+Cyberzavod is local-first. Nothing is shared unless you explicitly use sharing or publishing functionality: only the gallery commands (`login`, `share`, `unshare`, `gallery`) send anything to a server. `view` contacts the npm registry once, to download the viewer package, and then runs offline. `init`, `sync`, `status`, `doctor` and the hooks send nothing anywhere.
 
 Guides: [Cyberzavod in 3 minutes](https://cyberzavod.com/guides/getting-started/) and the [full guide](https://cyberzavod.com/guides/connect-project/). Commands, the record format and the source: [github.com/bysavelii/cyberzavod](https://github.com/bysavelii/cyberzavod).

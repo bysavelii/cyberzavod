@@ -366,6 +366,7 @@ describe("runCli", () => {
       "status",
       "decision",
       "note",
+      "view",
       "login",
       "logout",
       "share",
@@ -542,6 +543,24 @@ describe("runCli", () => {
         code: 1,
         text: true,
       });
+    });
+  });
+
+  it("view --help называет --no-open и переменную с пакетом цеха", async () => {
+    await runCli(["view", "--help"], root, NO_LOCALE);
+
+    const help = printedLog();
+
+    expect(help).toContain("view [--no-open]");
+    expect(help).toContain("CYBERZAVOD_VIEWER_PACKAGE");
+  });
+
+  it("view вне проекта сообщает, что проект не найден, и не ищет пакет цеха", async () => {
+    const code = await runCli(["view", "--no-open"], workspace, NO_LOCALE);
+
+    expect({ code, error: printedError() }).toEqual({
+      code: 1,
+      error: `cyberzavod view: ${CLI_MESSAGES.en.errors.projectNotFound(workspace)}`,
     });
   });
 

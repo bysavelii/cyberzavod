@@ -3,6 +3,7 @@
 import { CLI_COMMAND } from "@cyberzavod/adapter-kit";
 import { AGENT_NAMES, DEFAULT_AGENT_NAME } from "../agents/agent-adapter.ts";
 import { API_URL_VARIABLE, DEFAULT_API_URL } from "../sharing/services.ts";
+import { VIEWER_PACKAGE_NAME, VIEWER_PACKAGE_VARIABLE } from "../viewer/viewer-package.ts";
 import type { CliMessages } from "./cli-messages.ts";
 import { ALL_HOOK_NAMES } from "./hook-names.ts";
 
@@ -85,6 +86,17 @@ export const en: CliMessages = {
       usage: 'note "<text>"',
       summary: "record a note in the journal",
       parameters: [{ name: '"<text>"', description: "the note text" }],
+    },
+    view: {
+      usage: "view [--no-open]",
+      summary: "show your recordings and drafts on the factory floor",
+      parameters: [
+        { name: "--no-open", description: "do not open the browser, only print the address" },
+        {
+          name: VIEWER_PACKAGE_VARIABLE,
+          description: `${VIEWER_PACKAGE_NAME} spec or archive path`,
+        },
+      ],
     },
     draft: {
       usage: "draft [<raw session log>]",
@@ -346,6 +358,14 @@ export const en: CliMessages = {
   journal: {
     recorded: (path) => `recorded: ${path}`,
   },
+  view: {
+    preparing: (spec) =>
+      `Getting the factory floor (${spec}); the first run downloads it, later runs need no network`,
+    address: (url) => `factory floor: ${url}`,
+    stopHint: "Press Ctrl+C to stop.",
+    openFailed: "could not open the browser: open the address above yourself",
+    requestFailed: (reason) => `could not answer the browser: ${reason}`,
+  },
   login: {
     openVerification: ({ url, code }) => `Open ${url} and enter the code ${code}`,
     waiting: "Waiting for confirmation…",
@@ -393,6 +413,10 @@ export const en: CliMessages = {
       `language “${value}” is not supported: available are ${supported}`,
     projectNotFound: (directory) =>
       `${directory} is not in a Cyberzavod project: run ${CLI_COMMAND} init first`,
+    viewerUnavailable: (spec) =>
+      `could not get the factory floor package ${spec}: the first run needs network access to download it`,
+    viewerBroken: (directory) =>
+      `the factory floor package is incomplete: no index.html in ${directory}`,
     unexpected: (reason) => `unexpected error: ${reason}`,
     debugHint: (variable) =>
       `Run ${CLI_COMMAND} doctor to check the setup. For the full trace, run again with ${variable}=1 and report it at https://github.com/bysavelii/cyberzavod/issues`,

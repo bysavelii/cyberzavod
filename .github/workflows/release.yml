@@ -1,5 +1,9 @@
-# Release of the npm package `cyberzavod` on a vX.Y.Z tag: the same checks as in CI, then publishing
-# the built CLI. The tag must match the package version, otherwise the release stops.
+# Release of the npm packages `cyberzavod` and `@cyberzavod/viewer` on a vX.Y.Z tag: the same checks
+# as in CI, then publishing the viewer and the built CLI. The tag must match both package versions,
+# otherwise the release stops. The viewer goes first: by the time the new CLI is `latest`, the
+# viewer it fetches for `view` is already in the registry. A package version that is already in the
+# registry is skipped, so a run can be repeated after a partial failure; the first version of the
+# viewer is published by hand (see RELEASING.md) and the tag run skips it.
 name: Release
 
 on:
@@ -26,34 +30,63 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
-      - name: Тег совпадает с версией пакета
+      - name: Тег совпадает с версиями пакетов
         run: |
-          version=$(node -p 'require("./packages/cli/package.json").version')
-          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
-            echo "тег $GITHUB_REF_NAME, а версия пакета $version" >&2
-            exit 1
-          fi
+          for package in packages/cli packages/viewer; do
+            version=$(node -p "require('./$package/package.json').version")
+            if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+              echo "тег $GITHUB_REF_NAME, а версия $package $version" >&2
+              exit 1
+            fi
+          done
       - run: make check-web
-      # The same human path on the archive that will go to npm, before publishing.
+      # The same human path on the archives that will go to npm, before publishing.
       - run: pnpm smoke
       # The monorepo packages are already bundled into dist/cyberzavod.mjs and have no versions:
-      # they cannot be substituted for workspace:*.
-      # The package user needs no devDependencies, so they are removed from the published manifest.
+      # they cannot be substituted for workspace:*. The viewer is built by its own `prepack`, with the
+      # build tools it finds in node_modules.
+      # The package user needs no devDependencies, so they are removed from the published manifests.
+      - name: Манифест цеха без зависимостей сборки
+        working-directory: packages/viewer
+        run: npm pkg delete devDependencies
       - name: Манифест пакета без зависимостей сборки
         working-directory: packages/cli
         run: npm pkg delete devDependencies
+      - name: Публикация цеха
+        working-directory: packages/viewer
+        run: |
+          name=$(node -p 'require("./package.json").name')
+          version=$(node -p 'require("./package.json").version')
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version уже в npm: пропускаю"
+            exit 0
+          fi
+          npm publish --access public
       - name: Публикация
         working-directory: packages/cli
-        run: npm publish --access public
-      # The registry serves the new version with a delay of up to several minutes (0.9.1 took more
-      # than two): wait until latest becomes the tag version, at most 10 minutes.
-      - name: Версия видна в npm как latest
         run: |
-          version=$(node -p 'require("./packages/cli/package.json").version')
-          for attempt in $(seq 40); do
-            latest=$(npm view cyberzavod dist-tags.latest)
-            if [[ "$latest" == "$version" ]]; then exit 0; fi
-            sleep 15
+          name=$(node -p 'require("./package.json").name')
+          version=$(node -p 'require("./package.json").version')
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version уже в npm: пропускаю"
+            exit 0
+          fi
+          npm publish --access public
+      # The registry serves the new version with a delay of up to several minutes (0.9.1 took more
+      # than two): wait until latest becomes the tag version, at most 10 minutes for each package.
+      - name: Версии видны в npm как latest
+        run: |
+          for package in packages/viewer packages/cli; do
+            name=$(node -p "require('./$package/package.json').name")
+            version=$(node -p "require('./$package/package.json').version")
+            latest=""
+            for attempt in $(seq 40); do
+              latest=$(npm view "$name" dist-tags.latest || true)
+              if [[ "$latest" == "$version" ]]; then break; fi
+              sleep 15
+            done
+            if [[ "$latest" != "$version" ]]; then
+              echo "npm отдаёт latest $latest у $name, а выпущена $version" >&2
+              exit 1
+            fi
           done
-          echo "npm отдаёт latest $latest, а выпущена $version" >&2
-          exit 1

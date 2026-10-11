@@ -3,6 +3,7 @@
 import { CLI_COMMAND } from "@cyberzavod/adapter-kit";
 import { AGENT_NAMES, DEFAULT_AGENT_NAME } from "../agents/agent-adapter.ts";
 import { API_URL_VARIABLE, DEFAULT_API_URL } from "../sharing/services.ts";
+import { VIEWER_PACKAGE_NAME, VIEWER_PACKAGE_VARIABLE } from "../viewer/viewer-package.ts";
 import type { CliMessages } from "./cli-messages.ts";
 import { ALL_HOOK_NAMES } from "./hook-names.ts";
 
@@ -85,6 +86,17 @@ export const ru: CliMessages = {
       usage: 'note "<текст>"',
       summary: "записать заметку в журнал",
       parameters: [{ name: '"<текст>"', description: "текст заметки" }],
+    },
+    view: {
+      usage: "view [--no-open]",
+      summary: "показать ваши записи и черновики в цехе",
+      parameters: [
+        { name: "--no-open", description: "не открывать браузер, только напечатать адрес" },
+        {
+          name: VIEWER_PACKAGE_VARIABLE,
+          description: `спецификация ${VIEWER_PACKAGE_NAME} или путь к архиву`,
+        },
+      ],
     },
     draft: {
       usage: "draft [<сырой журнал сессии>]",
@@ -345,6 +357,14 @@ export const ru: CliMessages = {
   journal: {
     recorded: (path) => `записано: ${path}`,
   },
+  view: {
+    preparing: (spec) =>
+      `Получаю цех (${spec}): при первом запуске он скачивается, потом сеть не нужна`,
+    address: (url) => `цех: ${url}`,
+    stopHint: "Остановить: Ctrl+C.",
+    openFailed: "не удалось открыть браузер: откройте адрес выше сами",
+    requestFailed: (reason) => `не удалось ответить браузеру: ${reason}`,
+  },
   login: {
     openVerification: ({ url, code }) => `Откройте ${url} и введите код ${code}`,
     waiting: "Жду подтверждения…",
@@ -392,6 +412,9 @@ export const ru: CliMessages = {
       `язык «${value}» не поддерживается: доступны ${supported}`,
     projectNotFound: (directory) =>
       `${directory} не в проекте Cyberzavod: сначала ${CLI_COMMAND} init`,
+    viewerUnavailable: (spec) =>
+      `не удалось получить пакет цеха ${spec}: при первом запуске нужна сеть, чтобы скачать его`,
+    viewerBroken: (directory) => `пакет цеха неполный: в ${directory} нет index.html`,
     unexpected: (reason) => `неожиданная ошибка: ${reason}`,
     debugHint: (variable) =>
       `Проверьте подключение: ${CLI_COMMAND} doctor. Полная трасса — при запуске с ${variable}=1; сообщите о ней: https://github.com/bysavelii/cyberzavod/issues`,

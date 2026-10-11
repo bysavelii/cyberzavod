@@ -3,17 +3,20 @@
 // init, the capture hook, a decision in the journal, disconnect. After disconnect the human's code
 // and files are in place, Cyberzavod files are removed, the journal stays. The path runs twice, for
 // each agent the package supports: Claude Code, and Codex, which adds the trust in the human's
-// Codex config, a session that starts in a subdirectory and the `.env` guard. Runs on Linux, macOS
-// and Windows: Node API only, no shell, except the npm call, which on Windows is `npm.cmd`.
+// Codex config, a session that starts in a subdirectory and the `.env` guard. The Claude Code path
+// also runs `view` against the packed viewer package and checks the archive sizes. Runs on Linux,
+// macOS and Windows: Node API only, no shell, except the npm call, which on Windows is `npm.cmd`.
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { request } from "node:http";
 import os from "node:os";
 import path from "node:path";
 
 const PACKAGE = path.resolve(import.meta.dirname, "..");
+const VIEWER_PACKAGE = path.resolve(PACKAGE, "../viewer");
 const IS_WINDOWS = process.platform === "win32";
 // A space in the project path catches commands that join a path into a string without quotes.
 const PROJECT_NAME = "smoke project";
@@ -25,7 +28,26 @@ const PUBLISHED_FILES = [
   "dist/cyberzavod.mjs",
   "package.json",
 ];
+// Anything that makes the CLI archive grow by a library (the factory floor, Pixi) breaks this.
+const CLI_UNPACKED_BUDGET_BYTES = 600_000;
+const VIEWER_PUBLISHED_FILES = [
+  "LICENSE",
+  "README.md",
+  "bin/cyberzavod-viewer.mjs",
+  "dist/THIRD_PARTY_LICENSES",
+  "dist/index.html",
+  "package.json",
+];
+const VIEWER_ASSETS_PREFIX = "dist/assets/";
 const SESSION_ID = "smoke-session";
+const VIEW_RECORDING_ID = "smoke-view";
+const VIEW_DRAFT_ID = "smoke-draft";
+const VIEW_START_TIMEOUT_MS = 120_000;
+const VIEW_STOP_TIMEOUT_MS = 20_000;
+const FACTORY_FLOOR_LINE = /factory floor: (http:\/\/127\.0\.0\.1:\d+\/\?lang=en)/;
+const NOT_FOUND = 404;
+const FORBIDDEN = 403;
+const OK = 200;
 // Colors and other terminal control sequences start with this character.
 const ESCAPE = "\u001b";
 const SUCCESS = 0;
@@ -126,20 +148,58 @@ function jsonOf(run: Run, command: string): Record<string, unknown> {
   return JSON.parse(run.stdout) as Record<string, unknown>;
 }
 
-// npm may print build script output before the JSON: the document starts at the first `[`.
-function packPackage(destination: string): PackedPackage {
-  const output = npm(["pack", "--json", "--pack-destination", destination], PACKAGE);
-  const [packed] = JSON.parse(output.slice(output.indexOf("["))) as PackedPackage[];
+// npm prints the output of `prepack` before the JSON, and colored build logs contain `[` too:
+// the document starts at the first line that is exactly `[`.
+const PACK_JSON_START = /^\[$/m;
 
-  assert.ok(packed, "npm pack returned no archive");
+function packDirectory(directory: string, destination: string): PackedPackage {
+  const output = npm(["pack", "--json", "--pack-destination", destination], directory);
+  const jsonStart = output.search(PACK_JSON_START);
 
-  const packedFiles = packed.files.map((file) => file.path).sort();
+  assert.ok(jsonStart >= 0, `npm pack printed no JSON for ${directory}:\n${output}`);
 
-  assert.deepEqual(packedFiles, PUBLISHED_FILES, "archive has extra or missing files");
+  const [packed] = JSON.parse(output.slice(jsonStart)) as PackedPackage[];
+
+  assert.ok(packed, `npm pack returned no archive for ${directory}`);
   console.log(
     `  ${packed.filename}: ${packed.size} B packed, ${packed.unpackedSize} B unpacked, ` +
-      `${packedFiles.length} files`,
+      `${packed.files.length} files`,
   );
+
+  return packed;
+}
+
+function packedPathsOf(packed: PackedPackage): string[] {
+  return packed.files.map((file) => file.path).sort();
+}
+
+function packCli(destination: string): PackedPackage {
+  const packed = packDirectory(PACKAGE, destination);
+
+  assert.deepEqual(packedPathsOf(packed), PUBLISHED_FILES, "archive has extra or missing files");
+  assert.ok(
+    packed.unpackedSize <= CLI_UNPACKED_BUDGET_BYTES,
+    `the CLI grew to ${packed.unpackedSize} B unpacked, over the ${CLI_UNPACKED_BUDGET_BYTES} B limit`,
+  );
+
+  return packed;
+}
+
+async function packViewer(destination: string): Promise<PackedPackage> {
+  const packed = packDirectory(VIEWER_PACKAGE, destination);
+  const paths = packedPathsOf(packed);
+  const assets = paths.filter((file) => file.startsWith(VIEWER_ASSETS_PREFIX));
+  const others = paths.filter((file) => !file.startsWith(VIEWER_ASSETS_PREFIX));
+  // `dependencies` is checked in the source manifest: `npm pack` copies it as it is.
+  const manifest = JSON.parse(
+    await readFile(path.join(VIEWER_PACKAGE, "package.json"), "utf8"),
+  ) as {
+    dependencies?: Record<string, string>;
+  };
+
+  assert.deepEqual(others, VIEWER_PUBLISHED_FILES, "viewer archive has extra or missing files");
+  assert.ok(assets.length > 0, "viewer archive has no dist/assets");
+  assert.equal(manifest.dependencies, undefined, "the viewer package must have no dependencies");
 
   return packed;
 }
@@ -339,9 +399,279 @@ async function checkDisconnect(workspace: Workspace): Promise<void> {
   step("disconnect: the user's code, AGENTS.md, journal and settings are intact");
 }
 
-async function claudePath(tool: string, root: string, cli: string): Promise<void> {
+const JOURNAL = ".cyberzavod/journal";
+const VIEW_SESSION_FILE = `${JOURNAL}/sessions/${VIEW_RECORDING_ID}.json`;
+const VIEW_DRAFT_FILE = `${JOURNAL}/capture/claude/drafts/${VIEW_DRAFT_ID}.json`;
+const VIEW_FILES: Readonly<Record<string, string>> = {
+  [VIEW_SESSION_FILE]: JSON.stringify({
+    version: 1,
+    type: "session",
+    id: VIEW_RECORDING_ID,
+    timestamp: "2026-10-07T10:00:00.000Z",
+    projectId: "smoke-project",
+    source: { type: "agent", provider: "anthropic", agent: "claude" },
+    data: {
+      title: "Smoke recording",
+      language: "en",
+      workflow: "default",
+      harness: "0.1.0",
+      events: [
+        { t: 0, type: "build_start" },
+        { t: 10, type: "build_end", ok: true },
+      ],
+    },
+  }),
+  // A draft the editor has not touched: the prompt has no clean text yet.
+  [VIEW_DRAFT_FILE]: JSON.stringify({
+    id: VIEW_DRAFT_ID,
+    startedAt: "2026-10-08T10:00:00.000Z",
+    builds: [
+      {
+        id: VIEW_DRAFT_ID,
+        project: "",
+        harness: "",
+        workflow: "",
+        title: "",
+        language: "",
+        runs: ["run-1"],
+      },
+    ],
+    events: [
+      {
+        t: 0,
+        type: "draft_prompt",
+        said: "Add dark mode\nwith a toggle",
+        goal: "",
+        requirements: [],
+      },
+      { t: 1_000, type: "stage_enter", stage: "planning", run: "run-1" },
+      { t: 1_000, type: "draft_run", run: "run-1", agent: "analyst", until: 5_000 },
+      { t: 6_000, type: "build_end", ok: true },
+    ],
+  }),
+};
+
+interface HttpReply {
+  status: number | undefined;
+  type: string | undefined;
+  body: string;
+}
+
+// The request goes out as written: `fetch` would normalize `..` and encoded dots in the path, and
+// would not let a test choose the Host header.
+function httpGet(base: string, options: { path: string; host?: string }): Promise<HttpReply> {
+  const { hostname, port } = new URL(base);
+  const headers = options.host === undefined ? {} : { Host: options.host };
+
+  return new Promise((resolve, reject) => {
+    const outgoing = request({ hostname, port, path: options.path, headers }, (incoming) => {
+      const chunks: Buffer[] = [];
+
+      incoming.on("data", (chunk: Buffer) => chunks.push(chunk));
+      incoming.on("end", () =>
+        resolve({
+          status: incoming.statusCode,
+          type: incoming.headers["content-type"],
+          body: Buffer.concat(chunks).toString("utf8"),
+        }),
+      );
+    });
+
+    outgoing.on("error", reject);
+    outgoing.end();
+  });
+}
+
+// Everything the project holds, by path. `.git` is left out: it is not the human's code and git
+// may touch its index on its own.
+async function projectFiles(project: string): Promise<Record<string, string>> {
+  const entries = await readdir(project, { recursive: true, withFileTypes: true });
+  const files = entries.filter((entry) => entry.isFile());
+  const texts = await Promise.all(
+    files.map(async (entry) => {
+      const file = path.join(entry.parentPath, entry.name);
+
+      return [path.relative(project, file), await readFile(file, "utf8")] as const;
+    }),
+  );
+  const ownFiles = texts.filter(([file]) => file.split(path.sep)[0] !== ".git");
+
+  return Object.fromEntries(ownFiles);
+}
+
+interface RunningFloor {
+  url: string;
+  /** Stops the process the way the human does; resolves to its exit code. */
+  stop(): Promise<number | null>;
+}
+
+function exitOf(child: ChildProcess): Promise<number | null> {
+  return new Promise((resolve) => child.once("exit", (code) => resolve(code)));
+}
+
+// The address is read from the line the CLI prints for the human.
+function addressOf(child: ChildProcess): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let output = "";
+    const timer = setTimeout(
+      () => reject(new Error(`view printed no address in time:\n${output}`)),
+      VIEW_START_TIMEOUT_MS,
+    );
+
+    child.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+
+      const address = FACTORY_FLOOR_LINE.exec(output)?.[1];
+
+      if (address === undefined) return;
+
+      clearTimeout(timer);
+      resolve(address);
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      reject(new Error(`view exited with ${code} before it printed an address:\n${output}`));
+    });
+  });
+}
+
+// SIGINT is how the human stops it; Windows has no such signal for a child, so the process is
+// ended, and its exit code says nothing there.
+async function startFloor(
+  workspace: Workspace,
+  env: Readonly<Record<string, string>>,
+): Promise<RunningFloor> {
+  const child = spawn(process.execPath, [workspace.cli, "view", "--no-open"], {
+    cwd: workspace.project,
+    env: childEnvironment({ ...workspace.env, ...env }),
+  });
+  const exit = exitOf(child);
+  const url = await addressOf(child);
+  const stop = async () => {
+    child.kill(IS_WINDOWS ? undefined : "SIGINT");
+
+    const timer = setTimeout(() => child.kill("SIGKILL"), VIEW_STOP_TIMEOUT_MS);
+    const code = await exit;
+
+    clearTimeout(timer);
+
+    return code;
+  };
+
+  return { url, stop };
+}
+
+async function checkFloorServes(floor: RunningFloor): Promise<void> {
+  const page = await httpGet(floor.url, { path: "/" });
+  const recordings = await httpGet(floor.url, { path: "/api/recordings" });
+  const listed = JSON.parse(recordings.body) as {
+    published: { id: string }[];
+    drafts: { id: string }[];
+  };
+
+  assert.equal(page.status, OK, "view did not serve /");
+  assert.match(page.type ?? "", /^text\/html/);
+  assert.match(page.body, /<div id="root">/, "/ is not the factory floor page");
+  assert.deepEqual(
+    {
+      published: listed.published.map((record) => record.id),
+      drafts: listed.drafts.map((record) => record.id),
+    },
+    { published: [VIEW_RECORDING_ID], drafts: [VIEW_DRAFT_ID] },
+    "view lists other recordings or drafts than the project has",
+  );
+}
+
+async function checkFloorRefuses(floor: RunningFloor): Promise<void> {
+  const escapes = ["/..%2f..%2fpackage.json", "/%2e%2e/x", "/../package.json", "/package.json"];
+
+  for (const escape of escapes) {
+    const reply = await httpGet(floor.url, { path: escape });
+
+    assert.equal(reply.status, NOT_FOUND, `view answered ${escape} with ${reply.status}`);
+  }
+
+  const foreign = await httpGet(floor.url, { path: "/", host: "example.com" });
+
+  assert.equal(foreign.status, FORBIDDEN, "view answered a request for another Host");
+}
+
+// npx keeps what it fetched in `_npx` of the npm cache, never in the project.
+async function checkViewerCached(cache: string): Promise<void> {
+  const installs = await readdir(path.join(cache, "_npx"));
+  const cached = installs.filter((name) =>
+    existsSync(path.join(cache, "_npx", name, "node_modules", "@cyberzavod", "viewer")),
+  );
+
+  assert.equal(cached.length, 1, "the viewer package is not in the npx cache");
+}
+
+function expectStoppedByHuman(exitCode: number | null): void {
+  assert.ok(IS_WINDOWS || exitCode === SUCCESS, `view exited with ${exitCode} after SIGINT`);
+}
+
+// The first run installs the packed viewer into a fresh npm cache and serves it.
+async function checkViewFirstRun(
+  workspace: Workspace,
+  env: Readonly<Record<string, string>>,
+  cache: string,
+): Promise<void> {
+  const { project } = workspace;
+
+  await writeFiles(project, VIEW_FILES);
+
+  const before = await projectFiles(project);
+  const floor = await startFloor(workspace, env);
+
+  await checkFloorServes(floor);
+  await checkFloorRefuses(floor);
+  expectStoppedByHuman(await floor.stop());
+  assert.deepEqual(await projectFiles(project), before, "view changed the project");
+  assert.ok(
+    !existsSync(path.join(project, "node_modules")),
+    "view put node_modules in the project",
+  );
+  await checkViewerCached(cache);
+  step("view: serves the page and the list, refuses escapes and other hosts, writes nothing");
+}
+
+// The second run has no network. A tarball spec is a local file, so this proves that nothing is
+// fetched, not that npx finds the package in its cache: the registry spec is checked by hand, see
+// RELEASING.md.
+async function checkViewOffline(
+  workspace: Workspace,
+  env: Readonly<Record<string, string>>,
+): Promise<void> {
+  const floor = await startFloor(workspace, { ...env, npm_config_offline: "true" });
+  const page = await httpGet(floor.url, { path: "/" });
+
+  assert.equal(page.status, OK, "offline view did not serve /");
+  expectStoppedByHuman(await floor.stop());
+  step("view without network");
+}
+
+async function checkView(workspace: Workspace, viewer: string): Promise<void> {
+  const cache = await mkdtemp(path.join(os.tmpdir(), "cyberzavod-smoke-cache-"));
+  const env = { CYBERZAVOD_VIEWER_PACKAGE: viewer, npm_config_cache: cache };
+
+  try {
+    await checkViewFirstRun(workspace, env, cache);
+    await checkViewOffline(workspace, env);
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
+}
+
+async function claudePath(
+  tool: string,
+  root: string,
+  paths: { cli: string; viewer: string },
+): Promise<void> {
   const project = path.join(root, PROJECT_NAME);
-  const workspace: Workspace = { tool, project, cli, env: {} };
+  const workspace: Workspace = { tool, project, cli: paths.cli, env: {} };
 
   await createProject(project, {
     ".claude/settings.json": `${JSON.stringify(USER_SETTINGS, null, 2)}\n`,
@@ -353,6 +683,7 @@ async function claudePath(tool: string, root: string, cli: string): Promise<void
   checkSync(workspace);
   await checkRepeatedInit(workspace, [".claude/settings.json"]);
   checkJournal(workspace);
+  await checkView(workspace, paths.viewer);
   await checkDisconnect(workspace);
 }
 
@@ -566,12 +897,13 @@ async function main(): Promise<void> {
   try {
     await mkdir(tool);
 
-    const packed = packPackage(tool);
+    const packed = packCli(tool);
+    const viewer = await packViewer(tool);
     const cli = await installPackage(tool, packed);
 
     step(`npm pack and install ${packed.filename}`);
     checkVersion({ tool, project: root, cli, env: {} }, packed);
-    await claudePath(tool, root, cli);
+    await claudePath(tool, root, { cli, viewer: path.join(tool, viewer.filename) });
     await codexPath(tool, root, cli);
   } finally {
     await rm(root, { recursive: true, force: true });

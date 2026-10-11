@@ -17,6 +17,7 @@ import { requireProjectAt } from "./commands/project.ts";
 import { shareRecording, unshareRecording } from "./commands/share.ts";
 import { printStatus } from "./commands/status.ts";
 import { previewProject, syncProject } from "./commands/sync.ts";
+import { startView } from "./commands/view.ts";
 import { disconnectProject } from "./commands/disconnect.ts";
 import type { ProjectCheck } from "./doctor/check.ts";
 import { commandsFoundCheck } from "./doctor/commands-found.ts";
@@ -39,6 +40,9 @@ import { extractLanguageFlag, languageOf, type Environment } from "./messages/la
 import { ApiError } from "./sharing/api.ts";
 import { createSharing, type Sharing } from "./sharing/services.ts";
 import { credentialsFile, FileCredentialsStore } from "./sharing/settings.ts";
+import { openInBrowser } from "./viewer/browser.ts";
+import { locateViewer } from "./viewer/locate-viewer.ts";
+import { viewerInvocationOf } from "./viewer/viewer-package.ts";
 
 const SUCCESS = 0;
 const FAILURE = 1;
@@ -47,6 +51,7 @@ const COMMAND_HELP_FLAGS: readonly string[] = ["--help", "-h"];
 const VERSION_REQUESTS: readonly string[] = ["--version", "-v"];
 const OPTIONS_END = "--";
 const DEBUG_VARIABLE = "CYBERZAVOD_DEBUG";
+const STOP_SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 
 /**
  * How a command was run: its arguments, the directory it was called from, the environment and
@@ -80,6 +85,13 @@ function requiredText(value: string | undefined, missing: LocalizedText<CliMessa
   if (value === undefined || value.trim() === "") throw new CommandError(missing);
 
   return value;
+}
+
+// `view` runs until the human stops it.
+function untilStopped(): Promise<void> {
+  return new Promise((resolve) => {
+    for (const signal of STOP_SIGNALS) process.once(signal, () => resolve());
+  });
 }
 
 function defaultSharing(env: Environment): Sharing {
@@ -288,6 +300,26 @@ const COMMANDS: Readonly<Record<CommandName, Command>> = {
       const text = requiredText(positionals.join(" "), (m) => m.errors.missingNoteText);
 
       await recordNote(directory, text, messages);
+
+      return SUCCESS;
+    },
+  },
+  view: {
+    section: "journal",
+    run: async ({ args, directory, env, messages, language, adapters }) => {
+      const { values } = parseArgs({ args, options: { "no-open": { type: "boolean" } } });
+      const server = await startView(directory, {
+        messages,
+        language,
+        adapters,
+        env,
+        locate: (spec, root) => locateViewer(viewerInvocationOf(spec, process.platform), root, env),
+        open: openInBrowser,
+        isOpening: values["no-open"] !== true,
+      });
+
+      await untilStopped();
+      await server.close();
 
       return SUCCESS;
     },

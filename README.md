@@ -29,7 +29,7 @@ $setup
 $feature "Add dark mode"
 ```
 
-Commit what `init` and `/setup` (`$setup`) list. Optionally, `/publish-recording` (`$publish-recording`) turns the session into a recording and, only with your consent, shares it to your gallery on the site.
+Commit what `init` and `/setup` (`$setup`) list. Optionally, `/publish-recording` (`$publish-recording`) turns the session into a recording and, only with your consent, shares it to your gallery on the site. `npx cyberzavod view` shows your recordings and session drafts on the factory floor in the browser, served from your machine only.
 
 A project is driven by one agent. To switch, run `npx cyberzavod disconnect`, then `init --agent <agent>`.
 
@@ -47,7 +47,7 @@ Codex runs a project's hooks and roles only for a project you trust, and only wi
 
 ## Privacy
 
-Cyberzavod is local-first. Nothing is shared unless you explicitly use sharing or publishing functionality: only the gallery commands (`login`, `share`, `unshare`, `gallery`) use the network: GitHub to sign in and the cyberzavod.com server. `init`, `sync`, `status`, `doctor` and the hooks send nothing anywhere; npx only downloads the `cyberzavod` package from npm when it is not cached. Raw session logs, which contain your prompts, stay in the journal's `capture/` directory, which `init` keeps out of git.
+Cyberzavod is local-first. Nothing is shared unless you explicitly use sharing or publishing functionality: only the gallery commands (`login`, `share`, `unshare`, `gallery`) use the network: GitHub to sign in and the cyberzavod.com server. `init`, `sync`, `status`, `doctor` and the hooks send nothing anywhere; npx only downloads the `cyberzavod` package from npm when it is not cached; `view` also downloads the `@cyberzavod/viewer` package once and then works offline. Raw session logs, which contain your prompts, stay in the journal's `capture/` directory, which `init` keeps out of git.
 
 ## Removing it
 

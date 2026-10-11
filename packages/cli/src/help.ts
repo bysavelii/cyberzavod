@@ -67,14 +67,9 @@ export function generalHelp(
   });
   const footer = messages.help.footer(INTERFACE_LANGUAGES.join("|"));
 
-  return [
-    messages.help.title,
-    messages.help.quickStart,
-    "",
-    sections.join("\n\n"),
-    "",
-    footer,
-  ].join("\n");
+  const parts = [messages.help.title, messages.help.quickStart, "", sections.join("\n\n"), footer];
+
+  return parts.join("\n");
 }
 
 /**

@@ -2,7 +2,7 @@
 // agent. The CLI owns the interface, each agent's object in this directory is built on top of that
 // agent's adapter package, which knows nothing about the CLI.
 
-import type { InterfaceLanguage } from "@cyberzavod/core";
+import type { InterfaceLanguage, SessionRecord } from "@cyberzavod/core";
 import type {
   DisconnectPlan,
   HookOutcome,
@@ -77,6 +77,13 @@ export interface PublishRequest {
   draftPath?: string;
   /** Build of the draft; without it all are published. */
   buildId?: string;
+  language: InterfaceLanguage;
+}
+
+/** Which drafts to show as recordings. */
+export interface PreviewRequest {
+  /** Directory inside the project. */
+  projectDirectory: string;
   language: InterfaceLanguage;
 }
 
@@ -190,6 +197,8 @@ export interface AgentAdapter {
   draftSession(request: DraftRequest): Promise<string>;
   /** Publishes the draft's builds; false if the draft is not ready. */
   publishSessions(request: PublishRequest): Promise<boolean>;
+  /** Builds the recordings of the agent's drafts to look at; writes nothing, checks no leaks. */
+  previewDrafts(request: PreviewRequest): Promise<SessionRecord[]>;
 
   /** The error's text if it belongs to this adapter, otherwise undefined. */
   describeError(err: unknown, language: InterfaceLanguage): string | undefined;
