@@ -9,7 +9,7 @@ import { readAssets } from "./assets.ts";
 /**
  * Cyberzavod version: this CLI sets it in the project config; it is also the npm package version.
  */
-export const HARNESS_VERSION = "0.11.0";
+export const HARNESS_VERSION = "0.12.0";
 
 const RULES_TEMPLATE = "cli/rules.md";
 

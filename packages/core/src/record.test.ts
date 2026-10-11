@@ -4,6 +4,8 @@ import {
   INTERVENTION_REASONS,
   NO_TALLY,
   parseRecord,
+  parseSessionEvent,
+  RECORD_LIMITS,
   RecordError,
   summarize,
   tally,
@@ -633,5 +635,138 @@ describe("parseRecord: решения и заметки", () => {
     const act = () => parseRecord(raw);
 
     expect(act).toThrow(/text/);
+  });
+});
+
+const { idLength, lineLength, textLength } = RECORD_LIMITS;
+
+// Fields of a record in which a value can be replaced to check its limit.
+const RECORD_FIELDS: [
+  name: string,
+  limit: number,
+  put: (raw: RawSession, value: string) => void,
+][] = [
+  ["id", idLength, (raw, value) => void (raw.id = value)],
+  ["projectId", idLength, (raw, value) => void (raw.projectId = value)],
+  ["sessionId", lineLength, (raw, value) => void (raw.sessionId = value)],
+  ["source.provider", lineLength, (raw, value) => void (raw.source.provider = value)],
+  ["source.agent", lineLength, (raw, value) => void (raw.source.agent = value)],
+  ["title", lineLength, (raw, value) => void (raw.data.title = value)],
+  ["workflow", lineLength, (raw, value) => void (raw.data.workflow = value)],
+  ["harness", lineLength, (raw, value) => void (raw.data.harness = value)],
+  ["task", idLength, (raw, value) => void Object.assign(raw.data, { task: value })],
+];
+
+describe("parseRecord: пределы длины", () => {
+  it.each(RECORD_FIELDS)("принимает %s ровно на пределе", (_name, limit, put) => {
+    const raw = validSession();
+
+    put(raw, "a".repeat(limit));
+
+    const act = () => parseRecord(raw);
+
+    expect(act).not.toThrow();
+  });
+
+  it.each(RECORD_FIELDS)("отклоняет %s на один символ длиннее предела", (name, limit, put) => {
+    const raw = validSession();
+
+    put(raw, "a".repeat(limit + 1));
+
+    const act = () => parseRecord(raw);
+
+    expect(act).toThrow(new RecordError(`${name} must be at most ${limit} characters`));
+  });
+
+  it("считает эмодзи одной кодовой точкой", () => {
+    const raw = withData({ title: "🏭".repeat(lineLength) });
+
+    const act = () => parseRecord(raw);
+
+    expect(act).not.toThrow();
+  });
+
+  it("отклоняет эмодзи сверх предела", () => {
+    const raw = withData({ title: "🏭".repeat(lineLength + 1) });
+
+    const act = () => parseRecord(raw);
+
+    expect(act).toThrow(`title must be at most ${lineLength} characters`);
+  });
+
+  it("называет номер события и поле в сообщении о слишком длинном тексте", () => {
+    const raw = validSession();
+
+    raw.data.events.splice(3, 0, messageEvent({ text: "a".repeat(textLength + 1) }));
+
+    const act = () => parseRecord(raw);
+
+    expect(act).toThrow(`event #3: text must be at most ${textLength} characters`);
+  });
+});
+
+describe("parseSessionEvent: пределы длины", () => {
+  const prompt = (patch: Record<string, unknown>) => ({
+    t: 0,
+    type: "prompt",
+    goal: "Цель",
+    requirements: [],
+    ...patch,
+  });
+  const longLine = "a".repeat(lineLength + 1);
+  const events: [name: string, limit: number, raw: Record<string, unknown>, field: string][] = [
+    ["goal", lineLength, prompt({ goal: longLine }), "goal"],
+    ["requirements[1]", lineLength, prompt({ requirements: ["ok", longLine] }), "requirements[1]"],
+    ["model у prompt", lineLength, prompt({ model: longLine }), "model"],
+    [
+      "model у stage_enter",
+      lineLength,
+      { t: 0, type: "stage_enter", stage: "review", model: longLine },
+      "model",
+    ],
+    ["line у message", lineLength, messageEvent({ line: longLine }), "line"],
+    ["text у message", textLength, messageEvent({ text: "a".repeat(textLength + 1) }), "text"],
+    ["line у intervention", lineLength, interventionEvent({ line: longLine }), "line"],
+    [
+      "text у intervention",
+      textLength,
+      interventionEvent({ text: "a".repeat(textLength + 1) }),
+      "text",
+    ],
+    [
+      "reason у stage_fail",
+      lineLength,
+      { t: 0, type: "stage_fail", stage: "review", reason: longLine },
+      "reason",
+    ],
+  ];
+
+  it.each(events)("отклоняет %s длиннее предела", (_name, limit, raw, field) => {
+    const act = () => parseSessionEvent(raw, 2);
+
+    expect(act).toThrow(new RecordError(`event #2: ${field} must be at most ${limit} characters`));
+  });
+
+  it.each([
+    ["goal", prompt({ goal: "a".repeat(lineLength) })],
+    ["requirements[1]", prompt({ requirements: ["ok", "a".repeat(lineLength)] })],
+    ["text у message", messageEvent({ text: "a".repeat(textLength) })],
+    ["text у intervention", interventionEvent({ text: "a".repeat(textLength) })],
+    [
+      "reason у stage_fail",
+      { t: 0, type: "stage_fail", stage: "review", reason: "a".repeat(lineLength) },
+    ],
+  ])("принимает %s ровно на пределе", (_name, raw) => {
+    const act = () => parseSessionEvent(raw, 2);
+
+    expect(act).not.toThrow();
+  });
+
+  it("считает эмодзи в тексте одной кодовой точкой", () => {
+    const raw = messageEvent({ text: "🏭".repeat(textLength) });
+
+    const act = () => parseSessionEvent(raw, 2);
+
+    expect(act).not.toThrow();
   });
 });

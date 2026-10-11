@@ -1,3 +1,4 @@
+import { RECORD_LIMITS } from "@cyberzavod/core";
 import { describe, expect, it, vi } from "vitest";
 import { CommandError } from "../errors.ts";
 import { CLI_MESSAGES } from "../messages/catalog.ts";
@@ -139,6 +140,31 @@ describe("shareRecording", () => {
     const act = () => shareRecording(sharing, { directory: root, id: SESSION_ID, messages });
 
     await expect(act()).rejects.toThrow(/failed validation/);
+    expect(sharing.api.uploadRecording).not.toHaveBeenCalled();
+  });
+
+  it("запись с полем длиннее предела не отправляется", async () => {
+    const root = await temporaryProject();
+    const session = validSession(SESSION_ID);
+    const longText = "а".repeat(RECORD_LIMITS.textLength + 1);
+    const events = [
+      { t: 0, type: "build_start" },
+      { t: 5, type: "message", from: "foreman", to: "planning", line: "Задача", text: longText },
+      { t: 10, type: "build_end", ok: true },
+    ];
+
+    await writeSessionFile(
+      root,
+      SESSION_ID,
+      JSON.stringify({ ...session, data: { ...session.data, events } }),
+    );
+    const sharing = fakeSharing();
+
+    const act = () => shareRecording(sharing, { directory: root, id: SESSION_ID, messages });
+
+    await expect(act()).rejects.toThrow(
+      `failed validation: event #1: text must be at most ${RECORD_LIMITS.textLength}`,
+    );
     expect(sharing.api.uploadRecording).not.toHaveBeenCalled();
   });
 
