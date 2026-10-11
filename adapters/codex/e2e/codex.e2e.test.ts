@@ -210,7 +210,7 @@ describe("codex exec", () => {
       expect(tokens).toBeGreaterThan(0);
     });
 
-    it("публикует запись с источником openai/codex, и она проходит проверку ядра", async () => {
+    it("публикует запись с источником openai/codex с токенами по видам, и она проходит проверку ядра", async () => {
       const { file, draft } = await draftOf(session.project);
 
       await writeFile(file, JSON.stringify(filledIn(draft)));
@@ -222,8 +222,13 @@ describe("codex exec", () => {
         JSON.parse(await readFile(path.join(sessions, recordFile ?? ""), "utf8")),
       );
 
+      const events = record.type === "session" ? record.data.events : [];
+      const usages = events.filter((event) => event.type === "usage");
+
       expect(published.status, `${published.stdout}\n${published.stderr}`).toBe(0);
       expect(record.source).toEqual(CODEX_SOURCE);
+      expect(usages.length).toBeGreaterThan(0);
+      expect(usages.every((usage) => usage.breakdown !== undefined)).toBe(true);
     });
 
     it("при отключении возвращает конфиг Codex человека в прежний вид", async () => {

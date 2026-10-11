@@ -20,13 +20,15 @@ import type {
   DraftRun,
   MessageSource,
 } from "./draft.ts";
+import { tokensByModel, usageEventsOf } from "./model-tokens.ts";
 import type { RawEvent } from "./raw-event.ts";
 import { isHumanPrompt } from "./service-messages.ts";
 import type {
   AgentAssignment,
   AgentReport,
   ModelReply,
-  TokenUsage,
+  ModelTokens,
+  TimedTokenUsage,
   TranscriptText,
 } from "./transcript-model.ts";
 
@@ -157,10 +159,10 @@ const BEFORE_FIRST_ANCHOR = -1;
 /** Build data that is not in the log. */
 export interface DraftMeta {
   sessionId: string;
-  /** Subagent run tokens by `agentId`: each run carries its own transcript. */
-  runTokens?: ReadonlyMap<string, number>;
+  /** Subagent run tokens by `agentId`, summed by model: each run carries its own transcript. */
+  runTokens?: ReadonlyMap<string, readonly ModelTokens[]>;
   /** Main session message tokens: they are split between builds by these. */
-  sessionUsages?: readonly TokenUsage[];
+  sessionUsages?: readonly TimedTokenUsage[];
   /** Model of each subagent run by `agentId`: the first reply of the run's transcript. */
   runModels?: ReadonlyMap<string, string>;
   /**
@@ -774,31 +776,34 @@ function draftIntervention(t: number, reason: InterventionReason, said: string):
 }
 
 // Main session tokens land in the draft by spans between neighboring build anchors: a span's
-// messages are summed into one `usage` at the time of the first anchor, and so go to the same
-// build. Messages before the first anchor go to the start of the draft, to the first build.
+// messages are summed by model into one `usage` per model at the time of the first anchor, and so
+// go to the same build. Messages before the first anchor go to the start of the draft, to the first
+// build.
 function withSessionUsages(
   events: readonly DraftEvent[],
-  usages: readonly TokenUsage[],
+  usages: readonly TimedTokenUsage[],
 ): DraftEvent[] {
   const anchors = events.flatMap((event, index) =>
     isBuildAnchor(event) ? [{ t: event.t, index }] : [],
   );
-  const sums = new Map<number, { t: number; tokens: number }>();
+  const spans = new Map<number, TimedTokenUsage[]>();
 
-  for (const { ts, tokens } of usages) {
-    const anchor = anchors.findLast((candidate) => candidate.t <= ts);
+  for (const usage of usages) {
+    const anchor = anchors.findLast((candidate) => candidate.t <= usage.ts);
     const key = anchor?.index ?? BEFORE_FIRST_ANCHOR;
-    const sum = sums.get(key);
 
-    sums.set(key, { t: anchor?.t ?? 0, tokens: (sum?.tokens ?? 0) + tokens });
+    const span = spans.get(key) ?? [];
+
+    span.push(usage);
+    spans.set(key, span);
   }
 
-  const toEvent = (sum: { t: number; tokens: number } | undefined): DraftEvent[] =>
-    sum === undefined ? [] : [{ t: sum.t, type: "usage", tokens: sum.tokens }];
+  const usageEventsAt = (key: number, t: number): DraftEvent[] =>
+    usageEventsOf(tokensByModel(spans.get(key) ?? []), t);
 
   return [
-    ...toEvent(sums.get(BEFORE_FIRST_ANCHOR)),
-    ...events.flatMap((event, index) => [event, ...toEvent(sums.get(index))]),
+    ...usageEventsAt(BEFORE_FIRST_ANCHOR, 0),
+    ...events.flatMap((event, index) => [event, ...usageEventsAt(index, event.t)]),
   ];
 }
 
@@ -1059,7 +1064,9 @@ class DraftEventCollector {
 
     const run = stageOfAgent(event.agent) === undefined ? undefined : agentId;
 
-    this.draftEvents.push({ t: this.at(event.ts), type: "usage", tokens, ...runMark(run) });
+    for (const usage of usageEventsOf(tokens, this.at(event.ts))) {
+      this.draftEvents.push({ ...usage, ...runMark(run) });
+    }
   }
 }
 
@@ -1108,7 +1115,7 @@ export function toDraft(rawEvents: RawEvent[], meta: DraftMeta): Draft {
   const draftEvents = new DraftEventCollector(events, meta, at, endTs).collect();
   const messages = messagesOf(events, meta, draftEvents, atWithinBuild);
   const sessionUsages = (meta.sessionUsages ?? [])
-    .map(({ ts, tokens }) => ({ ts: at(ts), tokens }))
+    .map((usage) => ({ ...usage, ts: at(usage.ts) }))
     .filter(({ ts }) => ts >= 0 && ts <= at(endTs));
   const startedAt = new Date(startTs).toISOString();
   const day = startedAt.slice(0, ISO_DATE_LENGTH);

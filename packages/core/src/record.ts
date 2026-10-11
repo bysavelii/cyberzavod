@@ -89,6 +89,73 @@ export interface StageEnterEvent {
   model?: string;
 }
 
+/**
+ * Tokens one model message (or their sum) spent, by the kind the API prices them by. The kinds
+ * match the columns of the model price tables.
+ */
+export interface TokenBreakdown {
+  /** Input without the cache. */
+  input: number;
+  /** Tokens the model wrote. */
+  output: number;
+  /** Input read from the cache. */
+  cacheRead: number;
+  /** Input written to the cache for 5 minutes. */
+  cacheWrite5m: number;
+  /** Input written to the cache for 1 hour. */
+  cacheWrite1h: number;
+}
+
+/** Breakdown of nothing: the start of a sum. */
+export const NO_BREAKDOWN: TokenBreakdown = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite5m: 0,
+  cacheWrite1h: 0,
+};
+
+/**
+ * Tokens spent since the previous `usage` event (or the build start). `tokens` is the counter:
+ * what the model read fresh plus what it wrote, without cache reads. `breakdown` and `model` are
+ * absent in records made before they were recorded.
+ */
+export interface UsageEvent {
+  t: number;
+  type: "usage";
+  tokens: number;
+  /** Model that spent the tokens, an id like `claude-opus-5-5`; absent if unknown. */
+  model?: string;
+  /** The same tokens by kind; when present, `tokens` equals `countedTokensOf` of it. */
+  breakdown?: TokenBreakdown;
+}
+
+/**
+ * Tokens that go to the counter: input, output and cache writes. Cache reads do not count. The only
+ * place of the counter rule.
+ * @param {TokenBreakdown} breakdown Tokens by kind.
+ * @returns {number} The counted tokens.
+ */
+export function countedTokensOf(breakdown: TokenBreakdown): number {
+  return breakdown.input + breakdown.output + breakdown.cacheWrite5m + breakdown.cacheWrite1h;
+}
+
+/**
+ * Sums two breakdowns kind by kind.
+ * @param {TokenBreakdown} first First breakdown.
+ * @param {TokenBreakdown} second Second breakdown.
+ * @returns {TokenBreakdown} A new breakdown with the sums.
+ */
+export function addBreakdowns(first: TokenBreakdown, second: TokenBreakdown): TokenBreakdown {
+  return {
+    input: first.input + second.input,
+    output: first.output + second.output,
+    cacheRead: first.cacheRead + second.cacheRead,
+    cacheWrite5m: first.cacheWrite5m + second.cacheWrite5m,
+    cacheWrite1h: first.cacheWrite1h + second.cacheWrite1h,
+  };
+}
+
 /** Session event; `t` is milliseconds from the session start (the record's `timestamp`). */
 export type SessionEvent =
   | { t: number; type: "build_start" }
@@ -97,7 +164,7 @@ export type SessionEvent =
   | InterventionEvent
   | StageEnterEvent
   | { t: number; type: "stage_fail"; stage: Stage; reason: string }
-  | { t: number; type: "usage"; tokens: number }
+  | UsageEvent
   | { t: number; type: "build_end"; ok: boolean };
 
 /** Who made the record: an agent (provider and agent from its adapter) or a human by hand. */
@@ -298,11 +365,8 @@ function parsePrompt(raw: Record<string, unknown>, t: number, fail: Fail): Promp
   const prompt: PromptEvent = { t, type: "prompt", goal, requirements: [...requirements] };
 
   if (model === undefined) return prompt;
-  if (!isLine(model)) throw fail("model must be a non-empty single-line string");
 
-  requireWithin(model, RECORD_LIMITS.lineLength, "model", fail);
-
-  return { ...prompt, model };
+  return { ...prompt, model: parseModel(model, fail) };
 }
 
 function parseMessage(raw: Record<string, unknown>, t: number, fail: Fail): MessageEvent {
@@ -341,11 +405,8 @@ function parseStageEnter(raw: Record<string, unknown>, t: number, fail: Fail): S
   const entry: StageEnterEvent = { t, type: "stage_enter", stage };
 
   if (model === undefined) return entry;
-  if (!isLine(model)) throw fail("model must be a non-empty single-line string");
 
-  requireWithin(model, RECORD_LIMITS.lineLength, "model", fail);
-
-  return { ...entry, model };
+  return { ...entry, model: parseModel(model, fail) };
 }
 
 function parseStageFail(raw: Record<string, unknown>, t: number, fail: Fail): SessionEvent {
@@ -357,10 +418,53 @@ function parseStageFail(raw: Record<string, unknown>, t: number, fail: Fail): Se
   return { t, type: "stage_fail", stage: raw.stage, reason: raw.reason };
 }
 
-function parseUsage(raw: Record<string, unknown>, t: number, fail: Fail): SessionEvent {
-  if (typeof raw.tokens !== "number" || raw.tokens < 0) throw fail("invalid tokens");
+function parseTokenCount(raw: unknown, kind: string, fail: Fail): number {
+  if (!isTokenCount(raw)) throw fail(`breakdown.${kind} must be a non-negative integer`);
 
-  return { t, type: "usage", tokens: raw.tokens };
+  return raw;
+}
+
+function parseBreakdown(raw: unknown, fail: Fail): TokenBreakdown {
+  if (!isObject(raw)) throw fail("breakdown must be an object");
+
+  return {
+    input: parseTokenCount(raw.input, "input", fail),
+    output: parseTokenCount(raw.output, "output", fail),
+    cacheRead: parseTokenCount(raw.cacheRead, "cacheRead", fail),
+    cacheWrite5m: parseTokenCount(raw.cacheWrite5m, "cacheWrite5m", fail),
+    cacheWrite1h: parseTokenCount(raw.cacheWrite1h, "cacheWrite1h", fail),
+  };
+}
+
+function parseUsage(raw: Record<string, unknown>, t: number, fail: Fail): UsageEvent {
+  const { tokens, model, breakdown } = raw;
+
+  if (typeof tokens !== "number" || tokens < 0) throw fail("invalid tokens");
+
+  const usage: UsageEvent = { t, type: "usage", tokens };
+  const withModel = model === undefined ? usage : { ...usage, model: parseModel(model, fail) };
+
+  if (breakdown === undefined) return withModel;
+
+  const parsedBreakdown = parseBreakdown(breakdown, fail);
+
+  if (tokens !== countedTokensOf(parsedBreakdown)) {
+    throw fail("tokens must equal input + output + cache writes of the breakdown");
+  }
+
+  return { ...withModel, breakdown: parsedBreakdown };
+}
+
+function parseModel(raw: unknown, fail: Fail): string {
+  if (!isLine(raw)) throw fail("model must be a non-empty single-line string");
+
+  requireWithin(raw, RECORD_LIMITS.lineLength, "model", fail);
+
+  return raw;
+}
+
+function isTokenCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 function parseBuildEnd(raw: Record<string, unknown>, t: number, fail: Fail): SessionEvent {

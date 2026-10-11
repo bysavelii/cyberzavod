@@ -196,7 +196,8 @@ function mergedSpans(events: readonly DraftEvent[]): Span[] {
 /**
  * Counts build time: pauses longer than `IDLE_GAP_MS`, when no station of the build is working
  * and it has no events, are shrunk to it. Station work without events inside is not a pause.
- * The build ends at its last event or at the end of its last run window.
+ * The build ends at its last event or at the end of its last run window. The conversion `at` does
+ * not go back: a moment inside a shrunk pause is converted as the end of the part that was kept.
  * @param {readonly DraftEvent[]} events Events of one build, in order.
  * @returns {BuildTimeline | undefined} Build time, or undefined if it has no events
  *   with a time (tokens, start and end do not count).
@@ -215,7 +216,15 @@ export function buildTimeline(events: readonly DraftEvent[]): BuildTimeline | un
   });
   const cutBefore = (t: number) =>
     cuts.filter(({ before }) => before <= t).reduce((sum, { cut }) => sum + cut, 0);
-  const at = (t: number) => t - first.from - cutBefore(t);
+  // A moment inside a shrunk pause (an event without time, like tokens, can stand there) is
+  // placed at the end of the pause that was kept, so that time never goes back at the next event.
+  const keptPart = (t: number) =>
+    cuts.reduce((moment, { before, cut }) => {
+      const keptEnd = before - cut;
+
+      return moment > keptEnd && moment < before ? keptEnd : moment;
+    }, t);
+  const at = (t: number) => keptPart(t) - first.from - cutBefore(keptPart(t));
 
   return { start: first.from, end: at(last.to), at };
 }

@@ -374,6 +374,18 @@ describe("buildTimeline", () => {
     ]);
   });
 
+  it("не даёт времени идти назад внутри сжатой паузы: момент паузы встаёт в конец оставленной части", () => {
+    const gap = 10 * IDLE_GAP_MS;
+    const events = [stageEnter(0), stageEnter(gap)];
+
+    const timeline = buildTimeline(events);
+
+    const inside = [2 * IDLE_GAP_MS, gap - 1].map((t) => timeline?.at(t));
+
+    expect(inside).toEqual([IDLE_GAP_MS, IDLE_GAP_MS]);
+    expect(timeline?.at(gap)).toBe(IDLE_GAP_MS);
+  });
+
   it("не считает временем сборки токены, начало и конец черновика", () => {
     const events: DraftEvent[] = [
       { t: 0, type: "build_start" },

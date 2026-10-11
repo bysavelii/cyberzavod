@@ -56,12 +56,15 @@ export {
   toolDirectories,
   type DraftMeta,
 } from "./capture/to-draft.ts";
-export type {
-  AgentAssignment,
-  AgentReport,
-  ModelReply,
-  TokenUsage,
-  TranscriptText,
+export {
+  isTimedTokenUsage,
+  type AgentAssignment,
+  type AgentReport,
+  type ModelReply,
+  type ModelTokens,
+  type TimedTokenUsage,
+  type TokenUsage,
+  type TranscriptText,
 } from "./capture/transcript-model.ts";
 export {
   readTranscriptFile,

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  addBreakdowns,
   briefOf,
+  countedTokensOf,
   INTERVENTION_REASONS,
+  NO_BREAKDOWN,
   NO_TALLY,
   parseRecord,
   parseSessionEvent,
@@ -10,6 +13,7 @@ import {
   summarize,
   tally,
   type SessionRecord,
+  type TokenBreakdown,
 } from "./record.ts";
 
 // The session as raw JSON: tests break it however they like, parseRecord validates it.
@@ -739,6 +743,7 @@ describe("parseSessionEvent: пределы длины", () => {
       { t: 0, type: "stage_fail", stage: "review", reason: longLine },
       "reason",
     ],
+    ["model у usage", lineLength, { t: 0, type: "usage", tokens: 0, model: longLine }, "model"],
   ];
 
   it.each(events)("отклоняет %s длиннее предела", (_name, limit, raw, field) => {
@@ -768,5 +773,165 @@ describe("parseSessionEvent: пределы длины", () => {
     const act = () => parseSessionEvent(raw, 2);
 
     expect(act).not.toThrow();
+  });
+});
+
+function validBreakdown(): TokenBreakdown {
+  return { input: 100, output: 50, cacheRead: 4000, cacheWrite5m: 20, cacheWrite1h: 30 };
+}
+
+function usageEvent(patch: Record<string, unknown> = {}): Record<string, unknown> {
+  return { t: 30, type: "usage", tokens: 200, model: "claude-opus-5-5", ...patch };
+}
+
+describe("parseRecord: разбивка токенов", () => {
+  function sessionWithUsage(usage: Record<string, unknown>): RawSession {
+    const raw = validSession();
+
+    raw.data.events[3] = usage;
+
+    return raw;
+  }
+
+  it("принимает usage с моделью и разбивкой", () => {
+    const raw = sessionWithUsage(usageEvent({ breakdown: validBreakdown() }));
+
+    const record = parseSession(raw);
+
+    expect(record.data.events[3]).toEqual({
+      t: 30,
+      type: "usage",
+      tokens: 200,
+      model: "claude-opus-5-5",
+      breakdown: validBreakdown(),
+    });
+  });
+
+  it("принимает usage без модели и разбивки", () => {
+    const raw = sessionWithUsage({ t: 30, type: "usage", tokens: 1200 });
+
+    const record = parseSession(raw);
+
+    expect(record.data.events[3]).toEqual({ t: 30, type: "usage", tokens: 1200 });
+  });
+
+  it("принимает usage с моделью без разбивки", () => {
+    const raw = sessionWithUsage(usageEvent({ tokens: 1200 }));
+
+    const act = () => parseRecord(raw);
+
+    expect(act).not.toThrow();
+  });
+
+  it("отбрасывает лишние ключи разбивки", () => {
+    const raw = sessionWithUsage(usageEvent({ breakdown: { ...validBreakdown(), extra: 1 } }));
+
+    const record = parseSession(raw);
+
+    expect(record.data.events[3]).toHaveProperty("breakdown", validBreakdown());
+  });
+
+  it.each([
+    ["отрицательное", { input: -1 }],
+    ["дробное", { output: 1.5 }],
+    ["нечисловое", { cacheRead: "4000" }],
+    ["слишком большое", { cacheWrite1h: Number.MAX_SAFE_INTEGER + 1 }],
+  ])("отклоняет %s поле разбивки", (_name, patch) => {
+    const raw = sessionWithUsage(usageEvent({ breakdown: { ...validBreakdown(), ...patch } }));
+
+    const act = () => parseRecord(raw);
+
+    expect(act).toThrow(/breakdown\.\w+ must be a non-negative integer/);
+  });
+
+  it("отклоняет неполную разбивку", () => {
+    const { input, output, cacheRead, cacheWrite5m } = validBreakdown();
+    const raw = sessionWithUsage(
+      usageEvent({ breakdown: { input, output, cacheRead, cacheWrite5m } }),
+    );
+
+    const act = () => parseRecord(raw);
+
+    expect(act).toThrow("breakdown.cacheWrite1h must be a non-negative integer");
+  });
+
+  it("отклоняет разбивку не объектом", () => {
+    const raw = sessionWithUsage(usageEvent({ breakdown: "4000" }));
+
+    const act = () => parseRecord(raw);
+
+    expect(act).toThrow("breakdown must be an object");
+  });
+
+  it("отклоняет tokens, не равный счётчику разбивки", () => {
+    const raw = sessionWithUsage(usageEvent({ tokens: 201, breakdown: validBreakdown() }));
+
+    const act = () => parseRecord(raw);
+
+    expect(act).toThrow(
+      "event #3: tokens must equal input + output + cache writes of the breakdown",
+    );
+  });
+
+  it("отклоняет пустую и многострочную модель", () => {
+    const rawEmpty = sessionWithUsage(usageEvent({ model: " " }));
+    const rawMultiline = sessionWithUsage(usageEvent({ model: "a\nb" }));
+
+    const actEmpty = () => parseRecord(rawEmpty);
+    const actMultiline = () => parseRecord(rawMultiline);
+
+    expect(actEmpty).toThrow(/model/);
+    expect(actMultiline).toThrow(/model/);
+  });
+
+  it("оставляет версию формата первой", () => {
+    const raw = sessionWithUsage(usageEvent({ breakdown: validBreakdown() }));
+
+    const record = parseRecord(raw);
+
+    expect(record.version).toBe(1);
+  });
+});
+
+describe("countedTokensOf", () => {
+  it("считает вход, выход и запись в кэш, но не чтение кэша", () => {
+    const breakdown = validBreakdown();
+
+    const counted = countedTokensOf(breakdown);
+
+    expect(counted).toBe(200);
+  });
+});
+
+describe("addBreakdowns", () => {
+  it("складывает разбивки по видам", () => {
+    const first = validBreakdown();
+    const second = { input: 1, output: 2, cacheRead: 3, cacheWrite5m: 4, cacheWrite1h: 5 };
+
+    const sum = addBreakdowns(first, second);
+
+    expect(sum).toEqual({
+      input: 101,
+      output: 52,
+      cacheRead: 4003,
+      cacheWrite5m: 24,
+      cacheWrite1h: 35,
+    });
+  });
+
+  it("не меняет слагаемые", () => {
+    const first = validBreakdown();
+
+    addBreakdowns(first, validBreakdown());
+
+    expect(first).toEqual(validBreakdown());
+  });
+
+  it("не меняет разбивку при сложении с пустой", () => {
+    const breakdown = validBreakdown();
+
+    const sum = addBreakdowns(NO_BREAKDOWN, breakdown);
+
+    expect(sum).toEqual(breakdown);
   });
 });

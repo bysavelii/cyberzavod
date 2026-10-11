@@ -15,7 +15,6 @@ import {
   rolloutAssignments,
   rolloutModelReplies,
   rolloutReports,
-  rolloutTokenCount,
   rolloutTokenUsages,
   rolloutToolOutcomes,
 } from "./rollout.ts";
@@ -58,7 +57,6 @@ export const readRollout: TranscriptReader = async (rolloutPath) => {
 /** Codex rollouts for a recording draft. */
 export const codexTranscripts: SessionTranscripts = transcriptsOf(
   {
-    countTokens: rolloutTokenCount,
     tokenUsages: rolloutTokenUsages,
     modelReplies: rolloutModelReplies,
     assistantTexts: rolloutAnswers,
