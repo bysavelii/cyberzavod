@@ -463,6 +463,26 @@ export const UI_TEXT = {
       ru: "Не удалось загрузить журнал сборки — попробуйте обновить страницу.",
     },
   },
+  /** The factory floor of `cyberzavod view`: the project's own recordings and drafts. */
+  viewer: {
+    title: { en: "Your builds on the factory floor", ru: "Ваши сборки в цехе" },
+    drafts: { en: "Drafts", ru: "Черновики" },
+    recordings: { en: "Recordings", ru: "Записи" },
+    draft: { en: "draft", ru: "черновик" },
+    loading: { en: "Loading your recordings…", ru: "Загружаем ваши записи…" },
+    empty: {
+      en: "There are no recordings or drafts in this project yet.",
+      ru: "В этом проекте пока нет ни записей, ни черновиков.",
+    },
+    broken: {
+      en: "A recording did not pass the check — this floor cannot play it.",
+      ru: "Запись не прошла проверку — этот цех не может её проиграть.",
+    },
+    failed: {
+      en: "Could not read the recordings — look at the terminal where the command runs.",
+      ru: "Не удалось прочитать записи — загляните в терминал, где запущена команда.",
+    },
+  },
   /** The copy button on code blocks: labels per state. */
   copy: {
     labels: {
