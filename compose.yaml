@@ -15,6 +15,8 @@ x-api: &api
     GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     # Site address in development: GitHub returns to it after sign-in, Origin is checked against it.
     PUBLIC_URL: http://localhost:4321
+    # GitHub ids of the site owners (comma-separated) who may delete recordings and block accounts; empty: none.
+    ADMIN_GITHUB_IDS: ${ADMIN_GITHUB_IDS:-}
 
 services:
   db:

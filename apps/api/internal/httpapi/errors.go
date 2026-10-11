@@ -5,7 +5,9 @@ import "net/http"
 // API error codes: the client decides what to do by them; message is for the human.
 const (
 	codeUnauthorized      = "unauthorized"
+	codeForbidden         = "forbidden"
 	codeForbiddenOrigin   = "forbidden_origin"
+	codeAccountBlocked    = "account_blocked"
 	codeAuthUnavailable   = "auth_unavailable"
 	codeGitHubUnavailable = "github_unavailable"
 	codeTooLarge          = "too_large"

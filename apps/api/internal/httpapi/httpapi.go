@@ -42,6 +42,8 @@ type Galleries interface {
 	SetGalleryPublic(ctx context.Context, ownerID int64, isPublic bool) error
 	PublicGallery(ctx context.Context, login string) (gallery.Gallery, error)
 	SharedRecording(ctx context.Context, slug string) (gallery.SharedRecording, error)
+	DeleteSharedRecording(ctx context.Context, slug string) error
+	SetUserBlocked(ctx context.Context, login string, isBlocked bool) error
 }
 
 // Sessions is the store of site sign-in sessions. A session is looked up by the sha256 of its id;
@@ -71,6 +73,8 @@ type Deps struct {
 	// PublicURL is the site address without a trailing "/": the origin for checking cookie requests
 	// and the base of the GitHub return address.
 	PublicURL string
+	// AdminIDs are the GitHub ids of the site owners. Empty means nobody may use the admin routes.
+	AdminIDs []int64
 	// Now is the clock for session expiry and change-rate windows; nil means time.Now.
 	// Tests replace it.
 	Now    func() time.Time
@@ -109,6 +113,9 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("PUT /api/me/recordings/{id}", routes.authorized(routes.limitedChanges(routes.putRecording)))
 	mux.HandleFunc("DELETE /api/me/recordings/{id}", routes.authorized(routes.limitedChanges(routes.deleteRecording)))
 	mux.HandleFunc("PUT /api/me/gallery", routes.authorized(routes.putGallery))
+
+	mux.HandleFunc("DELETE /api/admin/recordings/{slug}", routes.adminOnly(routes.deleteAnyRecording))
+	mux.HandleFunc("PUT /api/admin/users/{login}", routes.adminOnly(routes.putUserBlocked))
 
 	mux.HandleFunc("GET /api/galleries/{login}", routes.publicGallery)
 	mux.HandleFunc("GET /api/recordings/{slug}", routes.sharedRecording)

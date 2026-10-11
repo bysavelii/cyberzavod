@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +16,8 @@ const (
 	defaultGitHubAPIURL   = "https://api.github.com"
 	defaultGitHubOAuthURL = "https://github.com"
 	defaultPublicURL      = "https://cyberzavod.com"
+
+	adminIDsVariable = "ADMIN_GITHUB_IDS"
 )
 
 // Config holds the API settings read from the environment.
@@ -36,10 +39,14 @@ type Config struct {
 	// PublicURL is the site address without a trailing "/": the GitHub return address is built
 	// from it, and the Origin of cookie-session requests is checked against it.
 	PublicURL string
+	// AdminGitHubIDs are the GitHub ids of the site owners who may delete any recording and block
+	// accounts. Empty means there are no owners and the admin routes refuse everyone. Never logged.
+	AdminGitHubIDs []int64
 }
 
 // Load reads the settings from environment variables. DATABASE_URL is required, the rest are not;
-// PUBLIC_URL, if set, must be only a scheme and host.
+// PUBLIC_URL, if set, must be only a scheme and host; ADMIN_GITHUB_IDS, if set, is positive
+// integers separated by commas.
 func Load() (Config, error) {
 	cfg := Config{
 		Addr:               Addr(),
@@ -59,7 +66,35 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("PUBLIC_URL: %w", err)
 	}
 
+	adminIDs, err := parseAdminIDs(os.Getenv(adminIDsVariable))
+	if err != nil {
+		return Config{}, fmt.Errorf("%s: %w", adminIDsVariable, err)
+	}
+
+	cfg.AdminGitHubIDs = adminIDs
+
 	return cfg, nil
+}
+
+// parseAdminIDs reads GitHub ids separated by commas; blank entries are skipped, an empty list
+// gives nil.
+func parseAdminIDs(list string) ([]int64, error) {
+	var ids []int64
+	for entry := range strings.SplitSeq(list, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		id, err := strconv.ParseInt(entry, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, fmt.Errorf("%q не id GitHub: ожидалось целое число больше нуля", entry)
+		}
+
+		ids = append(ids, id)
+	}
+
+	return ids, nil
 }
 
 // HasSiteLogin reports whether site sign-in is configured: it needs both client_id and secret.

@@ -27,6 +27,8 @@ var (
 	ErrStorageFull = errors.New("хранилище галерей заполнено")
 	// ErrTokenRejected means GitHub did not accept the author's token.
 	ErrTokenRejected = errors.New("GitHub не принял токен")
+	// ErrBlocked means the site owner blocked the author's account: it cannot upload recordings.
+	ErrBlocked = errors.New("аккаунт заблокирован владельцем сайта")
 )
 
 // User is a gallery author: a GitHub account. The key is GitHubID; the login can change.

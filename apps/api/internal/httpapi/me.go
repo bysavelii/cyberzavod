@@ -84,6 +84,11 @@ func (a *api) putRecording(w http.ResponseWriter, r *http.Request, user gallery.
 		return
 	}
 
+	if errors.Is(err, gallery.ErrBlocked) {
+		writeError(w, http.StatusForbidden, codeAccountBlocked, "Аккаунт заблокирован владельцем сайта: загрузка записей недоступна")
+		return
+	}
+
 	if errors.Is(err, gallery.ErrStorageFull) {
 		writeError(w, http.StatusInsufficientStorage, codeStorageFull, "Хранилище галерей заполнено, попробуйте позже")
 		return
