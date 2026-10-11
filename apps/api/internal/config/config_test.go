@@ -1,6 +1,55 @@
 package config
 
-import "testing"
+import (
+	"slices"
+	"strings"
+	"testing"
+)
+
+func TestLoadAdminGitHubIDs(t *testing.T) {
+	tests := []struct {
+		name    string
+		list    string
+		want    []int64
+		wantErr bool
+	}{
+		{"не задан", "", nil, false},
+		{"один id", "42", []int64{42}, false},
+		{"список с пробелами", " 42 , 7,1001 ", []int64{42, 7, 1001}, false},
+		{"пустые элементы пропускаются", "42,,7,", []int64{42, 7}, false},
+		{"одни пробелы", "  ", nil, false},
+		{"логин вместо id", "42,octocat", nil, true},
+		{"дробное число", "4.2", nil, true},
+		{"ноль", "0", nil, true},
+		{"отрицательное число", "-5", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("DATABASE_URL", "postgres://x")
+			t.Setenv("ADMIN_GITHUB_IDS", tt.list)
+
+			cfg, err := Load()
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ошибка %v, ожидалась ошибка: %v", err, tt.wantErr)
+			}
+			if !slices.Equal(cfg.AdminGitHubIDs, tt.want) {
+				t.Fatalf("AdminGitHubIDs %v, ожидался %v", cfg.AdminGitHubIDs, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadAdminGitHubIDsErrorNamesVariable(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("ADMIN_GITHUB_IDS", "octocat")
+
+	_, err := Load()
+
+	if err == nil || !strings.Contains(err.Error(), "ADMIN_GITHUB_IDS") || !strings.Contains(err.Error(), "octocat") {
+		t.Fatalf("ошибка %v, ожидалось имя переменной и неверное значение", err)
+	}
+}
 
 func TestLoad(t *testing.T) {
 	tests := []struct {

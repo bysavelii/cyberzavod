@@ -1,0 +1,35 @@
+name: Report content / Пожаловаться на содержимое
+description: Report a recording or a gallery on the site / Сообщить о записи или галерее на сайте
+title: "Report: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is public. Do not copy personal data or the content of the recording here: the link is enough.
+
+        Этот issue публичный. Не копируйте сюда личные данные и содержимое записи: достаточно ссылки.
+  - type: input
+    id: link
+    attributes:
+      label: Link to the recording or gallery / Ссылка на запись или галерею
+      placeholder: https://…
+    validations:
+      required: true
+  - type: dropdown
+    id: reason
+    attributes:
+      label: Reason / Причина
+      options:
+        - Spam / Спам
+        - Insults or abuse / Оскорбления
+        - Personal data / Личные данные
+        - Other / Другое
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details / Подробности
+      description: Optional. Do not quote personal data from the recording / Необязательно. Не цитируйте личные данные из записи.
+    validations:
+      required: false

@@ -14,27 +14,34 @@ import (
 )
 
 const (
-	authorToken   = "gho_author"
+	authorToken = "gho_author"
+	// adminToken is a token of the site owner.
+	adminToken    = "gho_admin"
 	rejectedToken = "gho_rejected"
 	// unreachableToken is a token for which GitHub does not respond.
 	unreachableToken = "gho_unreachable"
 	testClientID     = "Iv1.test"
 )
 
-var author = gallery.User{GitHubID: 7, Login: "octocat"}
+var (
+	author = gallery.User{GitHubID: 7, Login: "octocat"}
+	admin  = gallery.User{GitHubID: 99, Login: "site-owner"}
+)
 
 type fakeDB struct{ err error }
 
 func (f fakeDB) Ping(context.Context) error { return f.err }
 
-// fakeVerifier is GitHub without a network: authorToken belongs to author, unreachableToken
-// GitHub cannot verify, the rest it rejects.
+// fakeVerifier is GitHub without a network: authorToken belongs to author, adminToken to admin,
+// unreachableToken GitHub cannot verify, the rest it rejects.
 type fakeVerifier struct{}
 
 func (fakeVerifier) Verify(_ context.Context, token string) (gallery.User, error) {
 	switch token {
 	case authorToken:
 		return author, nil
+	case adminToken:
+		return admin, nil
 	case unreachableToken:
 		return gallery.User{}, errors.New("GitHub не ответил")
 	default:
@@ -43,13 +50,16 @@ func (fakeVerifier) Verify(_ context.Context, token string) (gallery.User, error
 }
 
 // fakeGalleries is a store without a database: it returns the given values, err from any method
-// except SaveUser. It remembers the authors that were created.
+// except SaveUser. It remembers the authors that were created, the links of deleted recordings and
+// the block flags that were set.
 type fakeGalleries struct {
 	err           error
 	isNew         bool
 	galleryPublic bool
 	recordings    []gallery.Summary
 	savedUsers    []gallery.User
+	deletedSlugs  []string
+	blockedLogins map[string]bool
 }
 
 func (f *fakeGalleries) SaveUser(_ context.Context, user gallery.User) error {
@@ -84,6 +94,28 @@ func (f *fakeGalleries) SharedRecording(context.Context, string) (gallery.Shared
 	return shared, f.err
 }
 
+func (f *fakeGalleries) DeleteSharedRecording(_ context.Context, slug string) error {
+	if f.err == nil {
+		f.deletedSlugs = append(f.deletedSlugs, slug)
+	}
+
+	return f.err
+}
+
+func (f *fakeGalleries) SetUserBlocked(_ context.Context, login string, isBlocked bool) error {
+	if f.err != nil {
+		return f.err
+	}
+
+	if f.blockedLogins == nil {
+		f.blockedLogins = map[string]bool{}
+	}
+
+	f.blockedLogins[login] = isBlocked
+
+	return nil
+}
+
 // sessionBody is the body of a session recording with identifier id.
 func sessionBody(id string) string {
 	return `{"version":1,"type":"session","id":"` + id + `","timestamp":"2026-10-05T08:00:00.000Z",` +
@@ -99,8 +131,16 @@ type apiRequest struct {
 	body   string
 }
 
-// serve runs a request through the API routes with the galleries store and client_id clientID.
+// serve runs a request through the API routes with the galleries store and client_id clientID;
+// admin is the site owner.
 func serve(t *testing.T, galleries *fakeGalleries, clientID string, request apiRequest) *httptest.ResponseRecorder {
+	t.Helper()
+
+	return serveWithAdmins(t, galleries, clientID, []int64{admin.GitHubID}, request)
+}
+
+// serveWithAdmins is serve with the given GitHub ids of the site owners.
+func serveWithAdmins(t *testing.T, galleries *fakeGalleries, clientID string, adminIDs []int64, request apiRequest) *httptest.ResponseRecorder {
 	t.Helper()
 
 	handler := NewHandler(Deps{
@@ -110,6 +150,7 @@ func serve(t *testing.T, galleries *fakeGalleries, clientID string, request apiR
 		Tokens:         fakeVerifier{},
 		GitHubClientID: clientID,
 		PublicURL:      testPublicURL,
+		AdminIDs:       adminIDs,
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	recorder := httptest.NewRecorder()

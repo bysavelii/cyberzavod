@@ -1,6 +1,6 @@
 import { Match, onMount, Show, Switch, type JSX } from "solid-js";
 import { cabinetUrl } from "@/entities/account";
-import { fetchGallery } from "@/entities/gallery";
+import { fetchGallery, galleryReportUrl } from "@/entities/gallery";
 import { readyValue } from "@/shared/api/remote.ts";
 import { remoteNoticeOf } from "@/shared/api/remote-notice.ts";
 import type { Locale } from "@/shared/i18n/locale.ts";
@@ -52,7 +52,14 @@ function AuthorView(props: { page: AuthorPage; siteUrl: string; locale: Locale }
         }
       >
         {(gallery) => (
-          <AuthorGallery gallery={gallery()} siteUrl={props.siteUrl} locale={props.locale} />
+          <>
+            <AuthorGallery gallery={gallery()} siteUrl={props.siteUrl} locale={props.locale} />
+            <div class={styles.links}>
+              <ButtonLink variant="link" href={galleryReportUrl(gallery().login, props.siteUrl)}>
+                {UI_TEXT.gallery.report[props.locale]}
+              </ButtonLink>
+            </div>
+          </>
         )}
       </Show>
     </>

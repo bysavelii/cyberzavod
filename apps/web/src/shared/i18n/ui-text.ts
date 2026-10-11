@@ -207,6 +207,7 @@ export const UI_TEXT = {
       en: "Could not load the recording — try reloading the page.",
       ru: "Не удалось загрузить запись — попробуйте обновить страницу.",
     },
+    report: { en: "Report this recording", ru: "Пожаловаться на запись" },
     // A gallery recording has no project card: the author and project id, like a GitHub repository.
     project: {
       en: (owner: string, project: string) => `${owner} / ${project}`,
@@ -240,6 +241,7 @@ export const UI_TEXT = {
       en: "This gallery is private or does not exist.",
       ru: "Эта галерея закрыта или её нет.",
     },
+    report: { en: "Report this gallery", ru: "Пожаловаться на галерею" },
     badgeHeading: { en: "Badge for README", ru: "Бейдж для README" },
     badgeHint: {
       en: "Paste this line into your project's README: the badge shows the number of builds and links to this gallery.",

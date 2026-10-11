@@ -90,6 +90,7 @@ func serve(ctx context.Context, stop context.CancelFunc, logger *slog.Logger) er
 		GitHubClientID: cfg.GitHubClientID,
 		OAuth:          siteLogin(cfg),
 		PublicURL:      cfg.PublicURL,
+		AdminIDs:       cfg.AdminGitHubIDs,
 		Logger:         logger,
 	})
 	srv := newServer(cfg.Addr, handler)

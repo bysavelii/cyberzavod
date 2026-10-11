@@ -11,6 +11,10 @@ interface Props {
 }
 
 const { locale } = Astro.props;
+
+if (Astro.site === undefined) throw new Error("в astro.config.ts не задан site");
+
+const siteUrl = Astro.site.href;
 ---
 
-<SharedJournal client:idle locale={locale} />
+<SharedJournal client:idle locale={locale} siteUrl={siteUrl} />

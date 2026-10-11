@@ -179,16 +179,22 @@ func (s *Store) saveRecording(ctx context.Context, tx pgx.Tx, ownerID int64, rec
 	return summary, isNew, nil
 }
 
-// lockOwner locks the author's row until the end of the transaction.
+// lockOwner locks the author's row until the end of the transaction and checks the account is not
+// blocked: reading the flag under the same lock means a block set during an upload is not missed.
+// A blocked author gives gallery.ErrBlocked.
 func lockOwner(ctx context.Context, tx pgx.Tx, ownerID int64) error {
-	var lockedID int64
-	err := tx.QueryRow(ctx, `SELECT github_id FROM users WHERE github_id = $1 FOR UPDATE`, ownerID).Scan(&lockedID)
+	var isBlocked bool
+	err := tx.QueryRow(ctx, `SELECT blocked FROM users WHERE github_id = $1 FOR UPDATE`, ownerID).Scan(&isBlocked)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gallery.ErrNotFound
 	}
 
 	if err != nil {
 		return fmt.Errorf("блокировка автора: %w", err)
+	}
+
+	if isBlocked {
+		return gallery.ErrBlocked
 	}
 
 	return nil
@@ -342,8 +348,48 @@ func (s *Store) SetGalleryPublic(ctx context.Context, ownerID int64, isPublic bo
 	return nil
 }
 
+// SetUserBlocked blocks or unblocks the author with the given login, case-insensitively. A blocked
+// author keeps their recordings, but their gallery and recordings are not served and they cannot
+// upload. No such author: gallery.ErrNotFound.
+func (s *Store) SetUserBlocked(ctx context.Context, login string, isBlocked bool) error {
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET blocked = $2, updated_at = now() WHERE lower(login) = lower($1)`,
+		login, isBlocked)
+	if err != nil {
+		return fmt.Errorf("смена блокировки автора: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("смена блокировки автора: %w", gallery.ErrNotFound)
+	}
+
+	return nil
+}
+
+// DeleteSharedRecording removes any author's recording by its secret link; the site owner uses
+// it. No such link: gallery.ErrNotFound.
+func (s *Store) DeleteSharedRecording(ctx context.Context, slug string) error {
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+
+	tag, err := s.pool.Exec(ctx, `DELETE FROM recordings WHERE slug = $1`, slug)
+	if err != nil {
+		return fmt.Errorf("удаление записи по ссылке: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("удаление записи по ссылке: %w", gallery.ErrNotFound)
+	}
+
+	return nil
+}
+
 // PublicGallery returns a public gallery by login, case-insensitively.
-// A private or nonexistent gallery gives gallery.ErrNotFound: an outsider cannot tell them apart.
+// A private, blocked or nonexistent gallery gives gallery.ErrNotFound: an outsider cannot tell
+// them apart.
 func (s *Store) PublicGallery(ctx context.Context, login string) (gallery.Gallery, error) {
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
@@ -353,7 +399,7 @@ func (s *Store) PublicGallery(ctx context.Context, login string) (gallery.Galler
 		ownerLogin string
 	)
 	err := s.pool.QueryRow(ctx,
-		`SELECT github_id, login FROM users WHERE lower(login) = lower($1) AND gallery_public`, login,
+		`SELECT github_id, login FROM users WHERE lower(login) = lower($1) AND gallery_public AND NOT blocked`, login,
 	).Scan(&ownerID, &ownerLogin)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return gallery.Gallery{}, gallery.ErrNotFound
@@ -371,7 +417,8 @@ func (s *Store) PublicGallery(ctx context.Context, login string) (gallery.Galler
 	return gallery.Gallery{Login: ownerLogin, Recordings: recordings}, nil
 }
 
-// SharedRecording returns a recording by its secret link. No such link: gallery.ErrNotFound.
+// SharedRecording returns a recording by its secret link. No such link or a blocked author:
+// gallery.ErrNotFound.
 func (s *Store) SharedRecording(ctx context.Context, slug string) (gallery.SharedRecording, error) {
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
@@ -381,7 +428,7 @@ func (s *Store) SharedRecording(ctx context.Context, slug string) (gallery.Share
 		SELECT u.login, u.gallery_public, r.body
 		FROM recordings r
 		JOIN users u ON u.github_id = r.owner_id
-		WHERE r.slug = $1`,
+		WHERE r.slug = $1 AND NOT u.blocked`,
 		slug,
 	).Scan(&shared.Owner, &shared.GalleryPublic, &shared.Record)
 	if errors.Is(err, pgx.ErrNoRows) {
