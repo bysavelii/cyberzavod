@@ -42,7 +42,7 @@ async function requestErrorOf(response: Response, path: string): Promise<ApiRequ
 
 /**
  * Reads an API response as JSON. Parsing it against the contract is up to the caller.
- * @param {string} path Path from the site root: `/api/stats`.
+ * @param {string} path Path from the site root: `/api/me`.
  * @param {ApiRequest} [request] Request; the browser's `fetch` by default.
  * @returns {Promise<unknown>} Response body.
  * @throws {ApiRequestError} If the API responded with an error.

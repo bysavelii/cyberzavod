@@ -49,7 +49,7 @@ func TestGalleryRoutes(t *testing.T) {
 		{"видимость не bool", apiRequest{http.MethodPut, "/api/me/gallery", authorToken, `{"public":"yes"}`}, fakeGalleries{}, "", http.StatusBadRequest, codeInvalidRequest},
 		{"видимость без токена", apiRequest{http.MethodPut, "/api/me/gallery", "", `{"public":true}`}, fakeGalleries{}, "", http.StatusUnauthorized, codeUnauthorized},
 
-		{"открытые галереи", apiRequest{method: http.MethodGet, path: "/api/galleries"}, fakeGalleries{}, "", http.StatusOK, ""},
+		{"общего списка галерей нет", apiRequest{method: http.MethodGet, path: "/api/galleries"}, fakeGalleries{}, "", http.StatusNotFound, ""},
 		{"открытая галерея", apiRequest{method: http.MethodGet, path: "/api/galleries/octocat"}, fakeGalleries{}, "", http.StatusOK, ""},
 		{"закрытая галерея", apiRequest{method: http.MethodGet, path: "/api/galleries/octocat"}, fakeGalleries{err: gallery.ErrNotFound}, "", http.StatusNotFound, codeNotFound},
 
@@ -61,7 +61,7 @@ func TestGalleryRoutes(t *testing.T) {
 		{"бейдж без .svg", apiRequest{method: http.MethodGet, path: "/api/badges/octocat"}, fakeGalleries{}, "", http.StatusNotFound, codeNotFound},
 		{"бейдж при сбое хранилища", apiRequest{method: http.MethodGet, path: "/api/badges/octocat.svg"}, fakeGalleries{err: errors.New("база упала")}, "", http.StatusInternalServerError, codeInternal},
 
-		{"сводка", apiRequest{method: http.MethodGet, path: "/api/stats"}, fakeGalleries{}, "", http.StatusOK, ""},
+		{"сводки по галереям нет", apiRequest{method: http.MethodGet, path: "/api/stats"}, fakeGalleries{}, "", http.StatusNotFound, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -173,17 +173,5 @@ func TestBadge(t *testing.T) {
 				t.Fatalf("в бейдже нет %q: %s", tt.want, recorder.Body)
 			}
 		})
-	}
-}
-
-func TestStats(t *testing.T) {
-	recorder := serve(t, &fakeGalleries{}, "", apiRequest{method: http.MethodGet, path: "/api/stats"})
-
-	if cacheControl := recorder.Header().Get("Cache-Control"); cacheControl != publicCacheControl {
-		t.Fatalf("Cache-Control %q, ожидался %q", cacheControl, publicCacheControl)
-	}
-	want := `{"recordings":0,"authors":0,"tokens":0,"withoutReworks":0,"returns":[],"interventions":[],"outcomes":{"ok":0,"failed":0}}`
-	if got := strings.TrimSpace(recorder.Body.String()); got != want {
-		t.Fatalf("ответ %s, ожидался %s", got, want)
 	}
 }

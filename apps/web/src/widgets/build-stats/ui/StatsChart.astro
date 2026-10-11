@@ -1,0 +1,37 @@
+---
+// One analytics chart: a heading and horizontal bars, or a note when nothing happened.
+import type { Locale } from "@/shared/i18n/locale.ts";
+import { UI_TEXT } from "@/shared/i18n/ui-text.ts";
+import { BarList, Title, type BarItem } from "@/shared/ui";
+
+interface Props {
+  /** Chart heading. */
+  heading: string;
+  /** Chart rows; empty means nothing to show. */
+  items: readonly BarItem[];
+  /** Page language. */
+  locale: Locale;
+}
+
+const { heading, items, locale } = Astro.props;
+const hasItems = items.length > 0;
+---
+
+<section class="section">
+  <Title as="h2">{heading}</Title>
+  {hasItems && <BarList items={items} />}
+  {!hasItems && <p class="note">{UI_TEXT.stats.none[locale]}</p>}
+</section>
+
+<style>
+  .section {
+    display: grid;
+    gap: var(--space-s);
+  }
+
+  .note {
+    margin: 0;
+    color: var(--ink-soft);
+    font-weight: 700;
+  }
+</style>

@@ -8,7 +8,6 @@
 export const API_PAGES = {
   sharedRecording: "/r/",
   galleries: "/gallery/",
-  stats: "/stats/",
   /** The signed-in author's account page: their gallery and recordings. */
   cabinet: "/me/",
 } as const;
@@ -21,10 +20,14 @@ export const QUERY_PARAMS = {
   galleryOwner: "user",
 } as const;
 
-// A gallery recording is visible only by its secret link, and each author has their own account
+// A gallery or a recording is visible only by its link, and each author has their own account
 // page: search engines do not need these pages, and without a query parameter or sign-in they
-// are empty.
-const UNINDEXED_PATHS: readonly string[] = [API_PAGES.sharedRecording, API_PAGES.cabinet];
+// are empty. One static page serves all galleries, so it cannot be closed for some of them only.
+const UNINDEXED_PATHS: readonly string[] = [
+  API_PAGES.sharedRecording,
+  API_PAGES.galleries,
+  API_PAGES.cabinet,
+];
 
 /**
  * Whether the page is hidden from search engines: such a page gets `noindex` and stays out of the

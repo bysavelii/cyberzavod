@@ -1,27 +1,14 @@
-export type {
-  Gallery,
-  GalleryListing,
-  OwnGallery,
-  RecordingSummary,
-  SharedRecording,
-} from "./model/gallery.ts";
-export {
-  parseGalleries,
-  parseGallery,
-  parseOwnGallery,
-  parseSharedRecording,
-} from "./model/parse.ts";
+export type { Gallery, OwnGallery, RecordingSummary, SharedRecording } from "./model/gallery.ts";
+export { parseGallery, parseOwnGallery, parseSharedRecording } from "./model/parse.ts";
 export {
   badgeImageUrl,
   badgeMarkdown,
-  galleriesUrl,
   galleryUrl,
   queryParamOf,
   sharedRecordingUrl,
 } from "./model/url.ts";
 export {
   deleteOwnRecording,
-  fetchGalleries,
   fetchGallery,
   fetchOwnGallery,
   fetchSharedRecording,

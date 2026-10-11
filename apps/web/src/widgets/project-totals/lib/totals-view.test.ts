@@ -10,6 +10,7 @@ function projectTotals(): RecordingTotals {
     prompts: 8,
     reworks: 3,
     buildsWithoutReworks: 4,
+    buildsSucceeded: 7,
     interventions: 1,
   };
 }

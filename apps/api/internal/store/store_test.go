@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -302,21 +301,10 @@ func TestClosedGalleryIsHidden(t *testing.T) {
 	hidden := gallery.User{GitHubID: 2, Login: "hidden"}
 	saveAuthor(t, store, hidden, false, 3)
 
-	overviews, listErr := store.PublicGalleries(t.Context())
-	_, galleryErr := store.PublicGallery(t.Context(), hidden.Login)
-	stats, statsErr := store.Stats(t.Context())
+	_, err := store.PublicGallery(t.Context(), hidden.Login)
 
-	if listErr != nil || statsErr != nil {
-		t.Fatalf("ошибки: список %v, сводка %v", listErr, statsErr)
-	}
-	if len(overviews) != 1 || overviews[0].Login != octocat.Login || overviews[0].RecordingCount != 2 {
-		t.Fatalf("список галерей %+v, ожидалась только octocat с 2 записями", overviews)
-	}
-	if !errors.Is(galleryErr, gallery.ErrNotFound) {
-		t.Fatalf("закрытая галерея: ошибка %v, ожидалась ErrNotFound", galleryErr)
-	}
-	if stats.Recordings != 2 || stats.Authors != 1 {
-		t.Fatalf("сводка %+v, ожидались 2 записи 1 автора", stats)
+	if !errors.Is(err, gallery.ErrNotFound) {
+		t.Fatalf("закрытая галерея: ошибка %v, ожидалась ErrNotFound", err)
 	}
 }
 
@@ -352,60 +340,16 @@ func TestSharedRecordingMissing(t *testing.T) {
 	}
 }
 
-func TestStats(t *testing.T) {
-	store := newTestStore(t)
-	saveAuthor(t, store, octocat, true, 0)
-	events := `[
-		{"t":0,"type":"build_start"},
-		{"t":1,"type":"usage","tokens":1000},
-		{"t":2,"type":"stage_fail","stage":"review","reason":"нет теста"},
-		{"t":3,"type":"stage_fail","stage":"review","reason":"снова"},
-		{"t":4,"type":"stage_fail","stage":"verification","reason":"красно"},
-		{"t":5,"type":"intervention","reason":"plan_review","line":"да","text":"да"},
-		{"t":6,"type":"usage","tokens":"много"},
-		{"t":7,"type":"build_end","ok":true}
-	]`
-	failedEvents := `[{"t":0,"type":"usage","tokens":500},{"t":1,"type":"build_end","ok":false}]`
-	for _, recording := range []gallery.Recording{
-		testRecording(t, "ok", 0, events),
-		testRecording(t, "failed", 1, failedEvents),
-	} {
-		if _, _, err := store.SaveRecording(t.Context(), octocat.GitHubID, recording); err != nil {
-			t.Fatalf("загрузка %s: %v", recording.ID, err)
-		}
-	}
-	want := gallery.Stats{
-		Recordings:     2,
-		Authors:        1,
-		Tokens:         1500,
-		WithoutReworks: 1,
-		Returns:        []gallery.StageReturns{{Stage: "review", Count: 2}, {Stage: "verification", Count: 1}},
-		Interventions:  []gallery.ReasonInterventions{{Reason: "plan_review", Count: 1}},
-		Outcomes:       gallery.Outcomes{OK: 1, Failed: 1},
-	}
-
-	stats, err := store.Stats(t.Context())
-	if err != nil {
-		t.Fatalf("сводка: %v", err)
-	}
-	if !reflect.DeepEqual(stats, want) {
-		t.Fatalf("сводка %+v, ожидалась %+v", stats, want)
-	}
-}
-
 func TestEmptyListsAreNotNil(t *testing.T) {
 	store := newTestStore(t)
 	saveAuthor(t, store, octocat, true, 0)
 
-	account, accountErr := store.Account(t.Context(), octocat.GitHubID)
-	stats, statsErr := store.Stats(t.Context())
-
-	if accountErr != nil || statsErr != nil {
-		t.Fatalf("ошибки: галерея %v, сводка %v", accountErr, statsErr)
+	account, err := store.Account(t.Context(), octocat.GitHubID)
+	if err != nil {
+		t.Fatalf("галерея: %v", err)
 	}
-	isEmptyList := account.Recordings != nil && stats.Returns != nil && stats.Interventions != nil
-	if !isEmptyList {
-		t.Fatalf("пустые списки должны уходить в JSON как [], а не null: %+v %+v", account, stats)
+	if account.Recordings == nil {
+		t.Fatalf("пустой список должен уходить в JSON как [], а не null: %+v", account)
 	}
 }
 

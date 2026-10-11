@@ -14,14 +14,7 @@ export interface RecordingSummary {
   readonly uploadedAt: string;
 }
 
-/** A public gallery in the shared list: the author, their recording count and when it changed. */
-export interface GalleryListing {
-  readonly login: string;
-  readonly recordingCount: number;
-  readonly updatedAt: string;
-}
-
-/** An author's public gallery: their recordings, newest first. */
+/** An author's public gallery opened by its link: their recordings, newest first. */
 export interface Gallery {
   readonly login: string;
   readonly recordings: readonly RecordingSummary[];

@@ -1,5 +1,13 @@
-import { INTERVENTION_REASONS, isStage, type InterventionReason } from "@cyberzavod/core";
-import type { BuildStats, TallyRow } from "@/entities/stats";
+import type { SessionRecord } from "@cyberzavod/core";
+import {
+  interventionsByReasonOf,
+  projectSeriesOf,
+  reworksByStageOf,
+  totalsOf,
+  type ReasonInterventions,
+  type RecordingTotals,
+  type StageReworks,
+} from "@/entities/recording";
 import { INTERVENTION_LABELS } from "@/shared/config/interventions.ts";
 import { STAGE_LABELS } from "@/shared/config/stages.ts";
 import type { Locale } from "@/shared/i18n/locale.ts";
@@ -21,77 +29,71 @@ export type StatsView =
       readonly outcomes: readonly BarItem[];
     };
 
-function isInterventionReason(key: string): key is InterventionReason {
-  return (INTERVENTION_REASONS as readonly string[]).includes(key);
-}
-
-// Values from recordings are not filtered: a stage or reason unknown to the site is labeled as is.
-function stageLabel(key: string, locale: Locale): string {
-  return isStage(key) ? STAGE_LABELS[key][locale] : key;
-}
-
-function reasonLabel(key: string, locale: Locale): string {
-  return isInterventionReason(key) ? INTERVENTION_LABELS[key][locale] : key;
-}
-
 // The most frequent on top: the chart answers where the process stalls the most.
 function mostFirst(a: BarItem, b: BarItem): number {
   return b.value - a.value || a.label.localeCompare(b.label);
 }
 
-function barsOf(
-  rows: readonly TallyRow[],
-  labelOf: (key: string, locale: Locale) => string,
+function returnBarsOf(stageReworks: readonly StageReworks[], locale: Locale): BarItem[] {
+  return stageReworks
+    .map(({ stage, count }) => barOf(STAGE_LABELS[stage][locale], count, locale))
+    .sort(mostFirst);
+}
+
+function interventionBarsOf(
+  interventions: readonly ReasonInterventions[],
   locale: Locale,
 ): BarItem[] {
-  return rows.map((row) => barOf(labelOf(row.key, locale), row.count, locale)).sort(mostFirst);
+  return interventions
+    .map(({ reason, count }) => barOf(INTERVENTION_LABELS[reason][locale], count, locale))
+    .sort(mostFirst);
 }
 
-function totalOf(rows: readonly TallyRow[]): number {
-  return rows.reduce((sum, row) => sum + row.count, 0);
+function outcomeBarsOf(totals: RecordingTotals, locale: Locale): BarItem[] {
+  return [
+    barOf(UI_TEXT.stats.succeeded[locale], totals.buildsSucceeded, locale),
+    barOf(UI_TEXT.stats.failed[locale], totals.builds - totals.buildsSucceeded, locale),
+  ];
 }
 
-// Called only for stats with recordings, so the share does not divide by zero.
-function firstPassItemOf(stats: BuildStats, locale: Locale): StatItem {
+// Called only for totals with builds, so the share does not divide by zero.
+function firstPassItemOf(totals: RecordingTotals, locale: Locale): StatItem {
   return {
     label: UI_TEXT.reworks.firstPass[locale],
-    value: formatPercent(stats.withoutReworks / stats.recordings, locale),
-    detail: UI_TEXT.reworks.firstPassOf[locale](stats.withoutReworks, stats.recordings),
+    value: formatPercent(totals.buildsWithoutReworks / totals.builds, locale),
+    detail: UI_TEXT.reworks.firstPassOf[locale](totals.buildsWithoutReworks, totals.builds),
   };
 }
 
-function totalsOf(stats: BuildStats, locale: Locale): StatItem[] {
+function totalItemsOf(totals: RecordingTotals, projectCount: number, locale: Locale): StatItem[] {
   return [
-    { label: UI_TEXT.stats.builds[locale], value: formatNumber(stats.recordings, locale) },
-    { label: UI_TEXT.stats.authors[locale], value: formatNumber(stats.authors, locale) },
-    { label: UI_TEXT.hud.tokens[locale], value: formatTokens(stats.tokens, locale) },
-    firstPassItemOf(stats, locale),
-    { label: UI_TEXT.hud.reworks[locale], value: formatNumber(totalOf(stats.returns), locale) },
-    {
-      label: UI_TEXT.hud.interventions[locale],
-      value: formatNumber(totalOf(stats.interventions), locale),
-    },
+    { label: UI_TEXT.stats.builds[locale], value: formatNumber(totals.builds, locale) },
+    { label: UI_TEXT.stats.projects[locale], value: formatNumber(projectCount, locale) },
+    { label: UI_TEXT.hud.tokens[locale], value: formatTokens(totals.tokens, locale) },
+    firstPassItemOf(totals, locale),
+    { label: UI_TEXT.hud.reworks[locale], value: formatNumber(totals.reworks, locale) },
+    { label: UI_TEXT.hud.interventions[locale], value: formatNumber(totals.interventions, locale) },
   ];
 }
 
 /**
  * Prepares analytics for display: numbers and charts of rework by stage, interventions by reason
  * and build outcomes, labeled in the page language.
- * @param {BuildStats} stats API response.
+ * @param {readonly SessionRecord[]} recordings The site's build recordings.
  * @param {Locale} locale Page language.
  * @returns {StatsView} A placeholder if there are no builds, otherwise numbers and chart rows.
  */
-export function statsViewOf(stats: BuildStats, locale: Locale): StatsView {
-  if (stats.recordings === 0) return { kind: "empty" };
+export function statsViewOf(recordings: readonly SessionRecord[], locale: Locale): StatsView {
+  if (recordings.length === 0) return { kind: "empty" };
+
+  const totals = totalsOf(recordings);
+  const projectCount = projectSeriesOf(recordings).length;
 
   return {
     kind: "filled",
-    totals: totalsOf(stats, locale),
-    returns: barsOf(stats.returns, stageLabel, locale),
-    interventions: barsOf(stats.interventions, reasonLabel, locale),
-    outcomes: [
-      barOf(UI_TEXT.stats.succeeded[locale], stats.outcomes.ok, locale),
-      barOf(UI_TEXT.stats.failed[locale], stats.outcomes.failed, locale),
-    ],
+    totals: totalItemsOf(totals, projectCount, locale),
+    returns: returnBarsOf(reworksByStageOf(recordings), locale),
+    interventions: interventionBarsOf(interventionsByReasonOf(recordings), locale),
+    outcomes: outcomeBarsOf(totals, locale),
   };
 }

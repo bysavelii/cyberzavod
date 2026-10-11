@@ -10,7 +10,7 @@ describe("getJson", () => {
   it("отдаёт тело успешного ответа", async () => {
     const request = respondWith('{"recordings": 3}', 200);
 
-    const body = await getJson("/api/stats", request);
+    const body = await getJson("/api/me", request);
 
     expect(body).toEqual({ recordings: 3 });
   });
@@ -28,7 +28,7 @@ describe("getJson", () => {
   it("помечает код неизвестным, если тело ошибки не JSON", async () => {
     const request = respondWith("<html>Bad Gateway</html>", 502);
 
-    const act = getJson("/api/stats", request);
+    const act = getJson("/api/me", request);
 
     await expect(act).rejects.toEqual(
       expect.objectContaining({ status: 502, code: "unknown" }) as ApiRequestError,
@@ -38,7 +38,7 @@ describe("getJson", () => {
   it("отклоняет успешный ответ, тело которого не JSON", async () => {
     const request = respondWith("<html></html>", 200);
 
-    const act = getJson("/api/stats", request);
+    const act = getJson("/api/me", request);
 
     await expect(act).rejects.toBeInstanceOf(ApiResponseError);
   });

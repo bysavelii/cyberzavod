@@ -1,28 +1,12 @@
 import { ApiRequestError } from "@/shared/api/errors.ts";
 import { getJson, sendCommand, type ApiRequest } from "@/shared/api/http.ts";
-import type { Gallery, GalleryListing, OwnGallery, SharedRecording } from "../model/gallery.ts";
-import {
-  parseGalleries,
-  parseGallery,
-  parseOwnGallery,
-  parseSharedRecording,
-} from "../model/parse.ts";
+import type { Gallery, OwnGallery, SharedRecording } from "../model/gallery.ts";
+import { parseGallery, parseOwnGallery, parseSharedRecording } from "../model/parse.ts";
 
 const UNAUTHORIZED_STATUS = 401;
 
 function isUnauthorized(err: unknown): boolean {
   return err instanceof ApiRequestError && err.status === UNAUTHORIZED_STATUS;
-}
-
-/**
- * Requests the public galleries.
- * @param {ApiRequest} [request] Request; the browser `fetch` by default.
- * @returns {Promise<readonly GalleryListing[]>} Galleries, newest first.
- */
-export async function fetchGalleries(request?: ApiRequest): Promise<readonly GalleryListing[]> {
-  const body = await getJson("/api/galleries", request);
-
-  return parseGalleries(body);
 }
 
 /**

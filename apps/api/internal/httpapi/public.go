@@ -12,25 +12,10 @@ import (
 
 const (
 	badgeSuffix = ".svg"
-	// publicCacheControl lets browsers and CDNs cache the badge and the summary for five minutes:
-	// they change rarely, but are shown in other people's READMEs and on every analytics page.
+	// publicCacheControl lets browsers and CDNs cache the badge for five minutes: it changes
+	// rarely, but is shown in other people's READMEs.
 	publicCacheControl = "public, max-age=300"
 )
-
-type galleriesResponse struct {
-	Galleries []gallery.Overview `json:"galleries"`
-}
-
-// galleries returns the list of public galleries.
-func (a *api) galleries(w http.ResponseWriter, r *http.Request) {
-	overviews, err := a.deps.Galleries.PublicGalleries(r.Context())
-	if err != nil {
-		a.failInternal(w, r, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, galleriesResponse{Galleries: overviews})
-}
 
 // publicGallery returns the author's public gallery; a private one looks like a missing one.
 func (a *api) publicGallery(w http.ResponseWriter, r *http.Request) {
@@ -97,16 +82,4 @@ func (a *api) badgeImage(ctx context.Context, login string) (string, error) {
 	}
 
 	return badge.Builds(found.Login, len(found.Recordings)), nil
-}
-
-// stats returns the summary of recordings in public galleries.
-func (a *api) stats(w http.ResponseWriter, r *http.Request) {
-	stats, err := a.deps.Galleries.Stats(r.Context())
-	if err != nil {
-		a.failInternal(w, r, err)
-		return
-	}
-
-	w.Header().Set("Cache-Control", publicCacheControl)
-	writeJSON(w, http.StatusOK, stats)
 }

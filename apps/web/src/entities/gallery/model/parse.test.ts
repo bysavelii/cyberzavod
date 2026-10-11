@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionRecord } from "@cyberzavod/core";
 import { ApiResponseError } from "@/shared/api/errors.ts";
-import { parseGalleries, parseGallery, parseOwnGallery, parseSharedRecording } from "./parse.ts";
+import { parseGallery, parseOwnGallery, parseSharedRecording } from "./parse.ts";
 
 function validSession(): SessionRecord {
   return {
@@ -41,30 +41,6 @@ function withoutField(object: Record<string, unknown>, key: string): Record<stri
 
   return Object.fromEntries(fields);
 }
-
-describe("parseGalleries", () => {
-  it("читает открытые галереи", () => {
-    const raw = { galleries: [{ login: "alice", recordingCount: 2, updatedAt: "2026-10-06" }] };
-
-    const galleries = parseGalleries(raw);
-
-    expect(galleries).toEqual([{ login: "alice", recordingCount: 2, updatedAt: "2026-10-06" }]);
-  });
-
-  it("принимает пустой список", () => {
-    const galleries = parseGalleries({ galleries: [] });
-
-    expect(galleries).toEqual([]);
-  });
-
-  it("отклоняет галерею без числа записей", () => {
-    const raw = { galleries: [{ login: "alice", updatedAt: "2026-10-06" }] };
-
-    const act = () => parseGalleries(raw);
-
-    expect(act).toThrow(ApiResponseError);
-  });
-});
 
 describe("parseGallery", () => {
   it("читает галерею автора с записями", () => {

@@ -7,7 +7,7 @@
     ".claude/agents/reviewer.md": "sha256:e2b2674bd92ee5a66150b1ce534851513c77159e220b331a7ca920cfe594efe8",
     ".claude/agents/tester.md": "sha256:eaeabd30b516447e0c4d7aeb89eb01b359ca7ca9e8e7061cf72dfcea82705fc3",
     ".claude/skills/feature/SKILL.md": "sha256:41eced3037f5485c581cb6fa639c2910bbc5b13b395c756b4c5f914df63d7726",
-    ".claude/skills/publish-recording/SKILL.md": "sha256:8d284d1c3bc0d10cd908e31882d12945c0dbc8d691053fad2bc56d25e26ff491",
+    ".claude/skills/publish-recording/SKILL.md": "sha256:205b50cc977952a5e7341b6394a5595032ef93f50f0e1777d7489a8bba19a3f8",
     ".claude/skills/setup/SKILL.md": "sha256:a9c606bd2d6638e16bb453fe4f7653ad4d7a6bf8e867da4844ba657785f8c526",
     "CLAUDE.md": "sha256:c4b5bcc0441a309b0edb9dbd3431d6857d279d16e4345c0e49fd15e2b5b60d4a",
     "adapters/claude/CLAUDE.md": "sha256:76491f484c64a98559a9edb1eda994709a7a41e193e5f10476d139ed1bcf3d98",

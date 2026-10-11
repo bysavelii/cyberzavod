@@ -2,22 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   badgeImageUrl,
   badgeMarkdown,
-  galleriesUrl,
   galleryUrl,
   queryParamOf,
   sharedRecordingUrl,
 } from "./url.ts";
-
-describe("galleriesUrl", () => {
-  it.each([
-    ["en", "/gallery/"],
-    ["ru", "/ru/gallery/"],
-  ] as const)("ведёт на список галерей на языке %s", (locale, expected) => {
-    const url = galleriesUrl(locale);
-
-    expect(url).toBe(expected);
-  });
-});
 
 describe("galleryUrl", () => {
   it.each([

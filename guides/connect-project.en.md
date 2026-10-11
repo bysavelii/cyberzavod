@@ -199,7 +199,7 @@ If one session handled several tasks, each one is published as a separate record
    npx cyberzavod gallery --public
    ```
 
-   An open gallery appears in the list of [galleries](/gallery/), gets its own page `/gallery/?user=<login>` and counts in the [analytics](/stats/) of builds: where the process stalls, how many tokens go, when a human is called. `gallery --private` closes it again; the links to recordings keep working.
+   An open gallery gets its own page `/gallery/?user=<login>` that anyone with the link can see, for example from the badge; there is no shared list of galleries and no analytics over them. `gallery --private` closes it again; the links to recordings keep working.
 
 A gallery holds up to 5 recordings; replacing a recording doesn't count as a new one. When the limit is reached, `share` lists your recordings: free a slot with `unshare <id>`. `gallery` without flags shows the recordings with their links, whether the gallery is open, and the limit. For an open gallery, `gallery` also prints a badge line for the README. The same line with a copy button is on the gallery page.
 

@@ -32,7 +32,7 @@ type TokenVerifier interface {
 	Verify(ctx context.Context, token string) (gallery.User, error)
 }
 
-// Galleries is the gallery store: authors, their recordings and the summary of public galleries.
+// Galleries is the gallery store: authors and their recordings.
 // What does not exist or is private to outsiders gives gallery.ErrNotFound.
 type Galleries interface {
 	SaveUser(ctx context.Context, user gallery.User) error
@@ -40,10 +40,8 @@ type Galleries interface {
 	SaveRecording(ctx context.Context, ownerID int64, recording gallery.Recording) (summary gallery.Summary, isNew bool, err error)
 	DeleteRecording(ctx context.Context, ownerID int64, recordID string) error
 	SetGalleryPublic(ctx context.Context, ownerID int64, isPublic bool) error
-	PublicGalleries(ctx context.Context) ([]gallery.Overview, error)
 	PublicGallery(ctx context.Context, login string) (gallery.Gallery, error)
 	SharedRecording(ctx context.Context, slug string) (gallery.SharedRecording, error)
-	Stats(ctx context.Context) (gallery.Stats, error)
 }
 
 // Sessions is the store of site sign-in sessions. A session is looked up by the sha256 of its id;
@@ -112,11 +110,9 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("DELETE /api/me/recordings/{id}", routes.authorized(routes.limitedChanges(routes.deleteRecording)))
 	mux.HandleFunc("PUT /api/me/gallery", routes.authorized(routes.putGallery))
 
-	mux.HandleFunc("GET /api/galleries", routes.galleries)
 	mux.HandleFunc("GET /api/galleries/{login}", routes.publicGallery)
 	mux.HandleFunc("GET /api/recordings/{slug}", routes.sharedRecording)
 	mux.HandleFunc("GET /api/badges/{file}", routes.badge)
-	mux.HandleFunc("GET /api/stats", routes.stats)
 
 	return mux
 }

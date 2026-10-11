@@ -10,7 +10,7 @@ export type JsonObject = Readonly<Record<string, unknown>>;
 /**
  * Checks that the value is a JSON object.
  * @param {unknown} value Value from the response.
- * @param {string} place What this is, for the error message: `ответ /api/stats`.
+ * @param {string} place What this is, for the error message: `ответ /api/me`.
  * @returns {JsonObject} The same value as an object.
  * @throws {ApiResponseError} If it is not an object.
  */

@@ -1,5 +1,5 @@
 export { publishedRecordings } from "./model/published.ts";
-export { comparisonUrl, recordingUrl } from "./model/url.ts";
+export { comparisonUrl, recordingUrl, statsUrl } from "./model/url.ts";
 export {
   comparisonOfRecording,
   comparisonTitleOf,
@@ -8,6 +8,7 @@ export {
 } from "./model/comparison.ts";
 export { recordingsOfProject } from "./model/project.ts";
 export { projectSeriesOf, type ProjectSeries } from "./model/series.ts";
+export { interventionsByReasonOf, type ReasonInterventions } from "./model/interventions.ts";
 export { reworksByStageOf, stageReworksDetailOf, type StageReworks } from "./model/reworks.ts";
 export {
   averagePerBuild,

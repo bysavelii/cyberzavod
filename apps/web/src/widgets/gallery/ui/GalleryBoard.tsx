@@ -1,6 +1,6 @@
 import { Match, onMount, Show, Switch, type JSX } from "solid-js";
-import { fetchGalleries, fetchGallery, galleriesUrl } from "@/entities/gallery";
-import { statsUrl } from "@/entities/stats";
+import { cabinetUrl } from "@/entities/account";
+import { fetchGallery } from "@/entities/gallery";
 import { readyValue } from "@/shared/api/remote.ts";
 import { remoteNoticeOf } from "@/shared/api/remote-notice.ts";
 import type { Locale } from "@/shared/i18n/locale.ts";
@@ -9,7 +9,6 @@ import { useStoreValue } from "@/shared/lib/use-store-value.ts";
 import { ButtonLink, Title } from "@/shared/ui";
 import { createGalleryPageModel, type GalleryPage } from "../model/gallery-page.ts";
 import { AuthorGallery } from "./AuthorGallery.tsx";
-import { GalleryList } from "./GalleryList.tsx";
 import styles from "./GalleryBoard.module.css";
 
 interface Props {
@@ -17,44 +16,21 @@ interface Props {
   locale: Locale;
   /** Site address, `site` from the Astro config: for the badge line in the README. */
   siteUrl: string;
-  /**
-   * Examples, the projects the factory built from scratch: static markup placed by Astro above
-   * user galleries in the shared list. An author's gallery does not have them.
-   */
-  examples?: JSX.Element;
 }
 
-type ListPage = Extract<GalleryPage, { view: "list" }>;
 type AuthorPage = Extract<GalleryPage, { view: "author" }>;
 
-interface ListViewProps {
-  page: ListPage;
-  examples: JSX.Element;
-  locale: Locale;
-}
-
-function ListView(props: ListViewProps): JSX.Element {
+function IntroView(props: { locale: Locale }): JSX.Element {
   return (
     <>
       <Title as="h1" size="xl">
-        {UI_TEXT.gallery.listHeading[props.locale]}
+        {UI_TEXT.pages.galleriesTitle[props.locale]}
       </Title>
-      <p class={styles.note}>{UI_TEXT.gallery.listIntro[props.locale]}</p>
-      {props.examples}
-      <Title as="h2">{UI_TEXT.examples.userGalleriesHeading[props.locale]}</Title>
-      <Show
-        when={readyValue(props.page.galleries)}
-        fallback={
-          <p class={styles.note}>
-            {remoteNoticeOf(props.page.galleries, UI_TEXT.remote.failed, props.locale)}
-          </p>
-        }
-      >
-        {(galleries) => <GalleryList galleries={galleries()} locale={props.locale} />}
-      </Show>
+      <p class={styles.note}>{UI_TEXT.gallery.intro[props.locale]}</p>
+      <p class={styles.note}>{UI_TEXT.account.ownGallery[props.locale]}</p>
       <div class={styles.links}>
-        <ButtonLink href={statsUrl(props.locale)}>
-          {UI_TEXT.pages.statsTitle[props.locale]}
+        <ButtonLink href={cabinetUrl(props.locale)}>
+          {UI_TEXT.pages.cabinetTitle[props.locale]}
         </ButtonLink>
       </div>
     </>
@@ -79,35 +55,23 @@ function AuthorView(props: { page: AuthorPage; siteUrl: string; locale: Locale }
           <AuthorGallery gallery={gallery()} siteUrl={props.siteUrl} locale={props.locale} />
         )}
       </Show>
-      <div class={styles.links}>
-        <ButtonLink href={galleriesUrl(props.locale)}>
-          {UI_TEXT.gallery.allGalleries[props.locale]}
-        </ButtonLink>
-      </div>
     </>
   );
 }
 
 /**
- * The galleries page: the shared list of public galleries or, with `?user=<login>`, an author's
- * gallery with a badge for the README. Data comes from the API in the browser.
+ * The galleries page: with `?user=<login>`, an author's gallery with a badge for the README;
+ * without it, an introduction saying a gallery opens by its author's link. Data comes from the
+ * API in the browser.
  * @param {Props} props Component props.
  * @param {Locale} props.locale Page language.
  * @param {string} props.siteUrl Site address.
- * @param {JSX.Element} [props.examples] Examples above user galleries.
- * @returns {JSX.Element} The list of galleries or an author's gallery.
+ * @returns {JSX.Element} The introduction or an author's gallery.
  */
 export function GalleryBoard(props: Props): JSX.Element {
-  const model = createGalleryPageModel({
-    fetchGalleries: () => fetchGalleries(),
-    fetchGallery: (login) => fetchGallery(login),
-  });
+  const model = createGalleryPageModel({ fetchGallery: (login) => fetchGallery(login) });
   const page = useStoreValue(model.$page);
-  const listPage = () => {
-    const current = page();
-
-    return current.view === "list" ? current : undefined;
-  };
+  const isIntro = () => page().view === "intro";
   const authorPage = () => {
     const current = page();
 
@@ -116,11 +80,13 @@ export function GalleryBoard(props: Props): JSX.Element {
 
   onMount(() => void model.open(window.location.search));
 
+  // While the page is `opening`, nothing is shown but the loading text: the introduction must not
+  // flash for those who came by an author's link.
   return (
     <div class={styles.board}>
-      <Switch>
-        <Match when={listPage()}>
-          {(list) => <ListView page={list()} examples={props.examples} locale={props.locale} />}
+      <Switch fallback={<p class={styles.note}>{UI_TEXT.remote.loading[props.locale]}</p>}>
+        <Match when={isIntro()}>
+          <IntroView locale={props.locale} />
         </Match>
         <Match when={authorPage()}>
           {(author) => <AuthorView page={author()} siteUrl={props.siteUrl} locale={props.locale} />}

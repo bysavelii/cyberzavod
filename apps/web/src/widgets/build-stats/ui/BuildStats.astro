@@ -1,18 +1,23 @@
 ---
-// Analytics page: the title and explanation are in the markup; the numbers and charts of public
-// galleries come from the API in the browser.
-import { galleriesUrl } from "@/entities/gallery";
+// Analytics page: counted at build time from the site's build recordings, so the markup is static
+// and needs neither JS nor the API.
+import type { SessionRecord } from "@cyberzavod/core";
 import type { Locale } from "@/shared/i18n/locale.ts";
 import { UI_TEXT } from "@/shared/i18n/ui-text.ts";
-import { ButtonLink, Panel, Title } from "@/shared/ui";
-import { StatsBoard } from "./StatsBoard.tsx";
+import { Panel, StatList, Title } from "@/shared/ui";
+import { statsViewOf } from "../lib/stats-view.ts";
+import StatsChart from "./StatsChart.astro";
 
 interface Props {
+  /** The site's build recordings. */
+  recordings: readonly SessionRecord[];
   /** Page language. */
   locale: Locale;
 }
 
-const { locale } = Astro.props;
+const { recordings, locale } = Astro.props;
+
+const view = statsViewOf(recordings, locale);
 ---
 
 <Panel scrollable>
@@ -20,11 +25,28 @@ const { locale } = Astro.props;
     <Title as="h1" size="xl">
       {UI_TEXT.stats.heading[locale]}
     </Title>
-    <p class="intro">{UI_TEXT.stats.intro[locale]}</p>
-    <StatsBoard client:load locale={locale} />
-    <div class="links">
-      <ButtonLink href={galleriesUrl(locale)}>{UI_TEXT.pages.galleriesTitle[locale]}</ButtonLink>
-    </div>
+    <p class="note">{UI_TEXT.stats.intro[locale]}</p>
+    {view.kind === "empty" && <p class="note">{UI_TEXT.stats.empty[locale]}</p>}
+    {view.kind === "filled" && (
+      <div class="board">
+        <StatList items={view.totals} />
+        <StatsChart
+          heading={UI_TEXT.stats.returnsHeading[locale]}
+          items={view.returns}
+          locale={locale}
+        />
+        <StatsChart
+          heading={UI_TEXT.stats.interventionsHeading[locale]}
+          items={view.interventions}
+          locale={locale}
+        />
+        <StatsChart
+          heading={UI_TEXT.stats.outcomesHeading[locale]}
+          items={view.outcomes}
+          locale={locale}
+        />
+      </div>
+    )}
   </article>
 </Panel>
 
@@ -36,7 +58,12 @@ const { locale } = Astro.props;
     max-width: 48rem;
   }
 
-  .intro {
+  .board {
+    display: grid;
+    gap: var(--space-xl);
+  }
+
+  .note {
     margin: 0;
     color: var(--ink-soft);
     font-weight: 700;
