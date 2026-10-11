@@ -1,5 +1,6 @@
+import { NO_BREAKDOWN } from "@cyberzavod/core";
 import { describe, expect, it } from "vitest";
-import type { RawEvent } from "./raw-event.ts";
+import { withOptional, type RawEvent } from "./raw-event.ts";
 import type { Draft, DraftEvent, DraftMessage } from "./draft.ts";
 import {
   directoriesOutsideProjects,
@@ -11,7 +12,13 @@ import {
   toDraft,
   toolDirectories,
 } from "./to-draft.ts";
-import type { AgentAssignment, AgentReport, TranscriptText } from "./transcript-model.ts";
+import type {
+  AgentAssignment,
+  AgentReport,
+  ModelTokens,
+  TimedTokenUsage,
+  TranscriptText,
+} from "./transcript-model.ts";
 
 const START = 1_000_000;
 
@@ -1255,8 +1262,19 @@ describe("toDraft: запуски станций", () => {
 
 function usagesOf(draft: Draft) {
   return draft.events.flatMap((event) =>
-    event.type === "usage" ? [{ t: event.t, tokens: event.tokens, run: event.run }] : [],
+    event.type === "usage"
+      ? [{ t: event.t, tokens: event.tokens, model: event.model, run: event.run }]
+      : [],
   );
+}
+
+// Tokens that all count: output only, so `tokens` of the event equals `output`.
+function outputTokens(output: number, model?: string): ModelTokens {
+  return withOptional<ModelTokens>({ breakdown: { ...NO_BREAKDOWN, output } }, { model });
+}
+
+function sessionUsage(ts: number, output: number, model?: string): TimedTokenUsage {
+  return { ts, ...outputTokens(output, model) };
 }
 
 describe("toDraft: токены", () => {
@@ -1267,10 +1285,46 @@ describe("toDraft: токены", () => {
       { ts: START + 5_000, kind: "subagent_start", agent: "coder", agentId: "c1" },
       { ts: START + 6_000, kind: "subagent_stop", agent: "coder", agentId: "c1" },
     ];
+    const runTokens = new Map([["c1", [outputTokens(500, "claude-sonnet-5-5")]]]);
 
-    const draft = toDraft(raw, { sessionId: "s1", runTokens: new Map([["c1", 500]]) });
+    const draft = toDraft(raw, { sessionId: "s1", runTokens });
 
-    expect(usagesOf(draft)).toEqual([{ t: 6_000, tokens: 500, run: "c1" }]);
+    expect(usagesOf(draft)).toEqual([
+      { t: 6_000, tokens: 500, model: "claude-sonnet-5-5", run: "c1" },
+    ]);
+  });
+
+  it("кладёт в usage станции разбивку токенов", () => {
+    const raw: RawEvent[] = [
+      { ts: START, kind: "subagent_start", agent: "coder", agentId: "c1" },
+      { ts: START + 1_000, kind: "subagent_stop", agent: "coder", agentId: "c1" },
+    ];
+    const breakdown = { input: 5, output: 3, cacheRead: 900, cacheWrite5m: 2, cacheWrite1h: 1 };
+    const runTokens = new Map([["c1", [{ model: "claude-sonnet-5-5", breakdown }]]]);
+
+    const draft = toDraft(raw, { sessionId: "s1", runTokens });
+
+    expect(draft.events.find((event) => event.type === "usage")).toMatchObject({
+      tokens: 11,
+      breakdown,
+    });
+  });
+
+  it("ставит на остановку станции по usage на каждую модель запуска", () => {
+    const raw: RawEvent[] = [
+      { ts: START, kind: "subagent_start", agent: "coder", agentId: "c1" },
+      { ts: START + 1_000, kind: "subagent_stop", agent: "coder", agentId: "c1" },
+    ];
+    const runTokens = new Map([
+      ["c1", [outputTokens(70, "claude-sonnet-5-5"), outputTokens(30, "claude-opus-5-5")]],
+    ]);
+
+    const draft = toDraft(raw, { sessionId: "s1", runTokens });
+
+    expect(usagesOf(draft)).toEqual([
+      { t: 1_000, tokens: 70, model: "claude-sonnet-5-5", run: "c1" },
+      { t: 1_000, tokens: 30, model: "claude-opus-5-5", run: "c1" },
+    ]);
   });
 
   it("ставит токены служебного сабагента на его остановку без запуска", () => {
@@ -1279,9 +1333,12 @@ describe("toDraft: токены", () => {
       { ts: START + 2_000, kind: "subagent_stop", agent: "Explore", agentId: "e1" },
     ];
 
-    const draft = toDraft(raw, { sessionId: "s1", runTokens: new Map([["e1", 40]]) });
+    const draft = toDraft(raw, {
+      sessionId: "s1",
+      runTokens: new Map([["e1", [outputTokens(40)]]]),
+    });
 
-    expect(usagesOf(draft)).toEqual([{ t: 2_000, tokens: 40, run: undefined }]);
+    expect(usagesOf(draft)).toEqual([{ t: 2_000, tokens: 40, model: undefined, run: undefined }]);
   });
 
   it("не пишет токенов запуску, чьи токены неизвестны", () => {
@@ -1303,43 +1360,64 @@ describe("toDraft: токены", () => {
       { ts: START + 6_000, kind: "subagent_stop", agent: "coder", agentId: "c1" },
       { ts: START + 20_000, kind: "stop" },
     ];
+    const OPUS = "claude-opus-5-5";
 
     it("суммирует сообщения между соседними привязками в одно usage на время первой", () => {
       const sessionUsages = [
-        { ts: START + 1_500, tokens: 1 },
-        { ts: START + 1_900, tokens: 2 },
-        { ts: START + 3_000, tokens: 10 },
-        { ts: START + 7_000, tokens: 100 },
-        { ts: START + 8_000, tokens: 200 },
+        sessionUsage(START + 1_500, 1, OPUS),
+        sessionUsage(START + 1_900, 2, OPUS),
+        sessionUsage(START + 3_000, 10, OPUS),
+        sessionUsage(START + 7_000, 100, OPUS),
+        sessionUsage(START + 8_000, 200, OPUS),
       ];
 
       const draft = toDraft(raw, {
         sessionId: "s1",
         sessionUsages,
-        runTokens: new Map([["c1", 50]]),
+        runTokens: new Map([["c1", [outputTokens(50)]]]),
       });
 
       expect(usagesOf(draft)).toEqual([
-        { t: 1_000, tokens: 3, run: undefined },
-        { t: 2_000, tokens: 10, run: undefined },
-        { t: 6_000, tokens: 50, run: "c1" },
-        { t: 6_000, tokens: 300, run: undefined },
+        { t: 1_000, tokens: 3, model: OPUS, run: undefined },
+        { t: 2_000, tokens: 10, model: OPUS, run: undefined },
+        { t: 6_000, tokens: 50, model: undefined, run: "c1" },
+        { t: 6_000, tokens: 300, model: OPUS, run: undefined },
+      ]);
+    });
+
+    it("делит участок на usage по моделям, суммируя разбивку каждой", () => {
+      const sessionUsages = [
+        sessionUsage(START + 1_500, 1, OPUS),
+        sessionUsage(START + 1_600, 5, "claude-haiku-4-5"),
+        sessionUsage(START + 1_900, 2, OPUS),
+        sessionUsage(START + 1_950, 4),
+      ];
+
+      const draft = toDraft(raw, { sessionId: "s1", sessionUsages });
+
+      expect(usagesOf(draft)).toEqual([
+        { t: 1_000, tokens: 3, model: OPUS, run: undefined },
+        { t: 1_000, tokens: 5, model: "claude-haiku-4-5", run: undefined },
+        { t: 1_000, tokens: 4, model: undefined, run: undefined },
       ]);
     });
 
     it("ставит сообщения до первой привязки в начало черновика", () => {
-      const sessionUsages = [{ ts: START + 200, tokens: 4 }];
+      const sessionUsages = [sessionUsage(START + 200, 4, OPUS)];
 
       const draft = toDraft(raw, { sessionId: "s1", sessionUsages });
 
-      expect(draft.events[0]).toEqual({ t: 0, type: "usage", tokens: 4 });
+      expect(draft.events[0]).toEqual({
+        t: 0,
+        type: "usage",
+        tokens: 4,
+        model: OPUS,
+        breakdown: { ...NO_BREAKDOWN, output: 4 },
+      });
     });
 
     it("не считает сообщения вне времени журнала", () => {
-      const sessionUsages = [
-        { ts: START - 1, tokens: 7 },
-        { ts: START + 20_001, tokens: 9 },
-      ];
+      const sessionUsages = [sessionUsage(START - 1, 7), sessionUsage(START + 20_001, 9)];
 
       const draft = toDraft(raw, { sessionId: "s1", sessionUsages });
 
@@ -1352,7 +1430,7 @@ describe("toDraft: токены", () => {
         { ts: START + 1_000, kind: "subagent_start", agent: "coder", agentId: "c1" },
         { ts: START + 9_000, kind: "stop" },
       ];
-      const sessionUsages = [{ ts: START + 2_000, tokens: 5 }];
+      const sessionUsages = [sessionUsage(START + 2_000, 5)];
 
       const draft = toDraft(raw, { sessionId: "s1", sessionUsages });
 
@@ -1366,15 +1444,15 @@ describe("toDraft: токены", () => {
 
     it("считает в сумме токены станций и сообщений журнала без потерь", () => {
       const sessionUsages = [
-        { ts: START + 100, tokens: 1 },
-        { ts: START + 3_000, tokens: 20 },
-        { ts: START + 10_000, tokens: 300 },
+        sessionUsage(START + 100, 1),
+        sessionUsage(START + 3_000, 20),
+        sessionUsage(START + 10_000, 300),
       ];
 
       const draft = toDraft(raw, {
         sessionId: "s1",
         sessionUsages,
-        runTokens: new Map([["c1", 4_000]]),
+        runTokens: new Map([["c1", [outputTokens(4_000)]]]),
       });
 
       expect(usagesOf(draft).reduce((sum, { tokens }) => sum + tokens, 0)).toBe(4_321);

@@ -5,17 +5,20 @@
 // model's messages are `response_item` lines); older versions wrote the "legacy" one (the model's
 // messages are `event_msg` lines `agent_message`), and both are read.
 //
-// Input tokens that the cache served are not counted: it is the same context reread at every step,
-// and it would inflate the counter many times over. This is the same rule as for Claude Code.
+// A response's tokens are written by kind: input the cache did not serve, input it served, and
+// output. The counter (`countedTokensOf`) leaves out the cache reads: it is the same context reread
+// at every step, and it would inflate the counter many times over. This is the same rule as for
+// Claude Code.
 
 import type {
   AgentAssignment,
   AgentReport,
   ModelReply,
-  TokenUsage,
+  TimedTokenUsage,
   TranscriptText,
 } from "@cyberzavod/adapter-kit";
 import { isObject } from "@cyberzavod/adapter-kit";
+import { NO_BREAKDOWN, type TokenBreakdown } from "@cyberzavod/core";
 
 interface RolloutLine {
   ts: number;
@@ -120,6 +123,11 @@ export function rolloutAnswers(rollout: string): TranscriptText[] {
   return texts.sort((a, b) => a.ts - b.ts);
 }
 
+// The model a turn runs on, named by its `turn_context` line.
+function turnModelOf({ type, payload }: RolloutLine): string | undefined {
+  return type === "turn_context" && typeof payload.model === "string" ? payload.model : undefined;
+}
+
 /**
  * Collects model replies from the rollout by time: they show which model received a prompt. A
  * `turn_context` line, which names the model, is written before the prompt reaches the rollout, so
@@ -131,25 +139,38 @@ export function rolloutAnswers(rollout: string): TranscriptText[] {
 export function rolloutModelReplies(rollout: string): ModelReply[] {
   const replies: ModelReply[] = [];
 
-  for (const { ts, type, payload } of linesOf(rollout)) {
-    const model = type === "turn_context" ? payload.model : undefined;
+  for (const line of linesOf(rollout)) {
+    const model = turnModelOf(line);
     const last = replies.at(-1);
 
-    if (typeof model === "string") replies.push({ ts, model });
-    else if (last !== undefined) last.ts = Math.max(last.ts, ts);
+    if (model !== undefined) replies.push({ ts: line.ts, model });
+    else if (last !== undefined) last.ts = Math.max(last.ts, line.ts);
   }
 
   return replies;
 }
 
-function responseTokensOf(payload: Record<string, unknown>): number | undefined {
+// The rollout format is internal: a count that is not a non-negative integer is taken as zero.
+function countOf(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+// `reasoning_output_tokens` is part of `output_tokens`, so it is not added again. The cache write
+// (`cache_write_input_tokens`) is not read: OpenAI does not price it apart from the input.
+function responseBreakdownOf(payload: Record<string, unknown>): TokenBreakdown | undefined {
   const { usage } = payload;
 
   if (!isObject(usage)) return undefined;
 
-  const count = (field: string) => (typeof usage[field] === "number" ? usage[field] : 0);
+  const count = (field: string) => countOf(usage[field]);
+  const cacheRead = count("cached_input_tokens");
 
-  return Math.max(0, count("input_tokens") - count("cached_input_tokens")) + count("output_tokens");
+  return {
+    ...NO_BREAKDOWN,
+    input: Math.max(0, count("input_tokens") - cacheRead),
+    output: count("output_tokens"),
+    cacheRead,
+  };
 }
 
 // The thread's own id: the run's `agent_id` in the hooks is the id of its thread.
@@ -168,44 +189,41 @@ function isOwnRecord(payload: Record<string, unknown>, threadId: string | undefi
   return threadId === undefined || typeof recordThread !== "string" || recordThread === threadId;
 }
 
-// Every model response has a `token_usage_record`; the same response must be counted once.
-function responseUsages(rollout: string): { ts: number; tokens: number }[] {
+// Every model response has a `token_usage_record`; the same response must be counted once. The
+// model is the one the last `turn_context` before the record named.
+function responseUsages(rollout: string): TimedTokenUsage[] {
   const lines = linesOf(rollout);
   const threadId = threadIdOf(lines);
   const seen = new Set<string>();
-  const usages: { ts: number; tokens: number }[] = [];
+  const usages: TimedTokenUsage[] = [];
+  let model: string | undefined;
 
-  for (const { ts, type, payload } of lines) {
-    const tokens = type === "token_usage_record" ? responseTokensOf(payload) : undefined;
+  for (const line of lines) {
+    const { ts, type, payload } = line;
+
+    model = turnModelOf(line) ?? model;
+
+    const breakdown = type === "token_usage_record" ? responseBreakdownOf(payload) : undefined;
     const responseId = typeof payload.response_id === "string" ? payload.response_id : undefined;
 
-    if (tokens === undefined || !isOwnRecord(payload, threadId)) continue;
+    if (breakdown === undefined || !isOwnRecord(payload, threadId)) continue;
     if (responseId !== undefined && seen.has(responseId)) continue;
     if (responseId !== undefined) seen.add(responseId);
 
-    usages.push({ ts, tokens });
+    usages.push({ ts, breakdown, ...(model === undefined ? {} : { model }) });
   }
 
   return usages;
 }
 
 /**
- * Counts tokens of a rollout: for every model response, the input the cache did not serve plus the
- * output.
+ * Splits rollout tokens by model response: a run's tokens are summed by model, and main session
+ * tokens are divided between builds by their time.
  * @param {string} rollout Rollout contents in JSONL format.
- * @returns {number} Sum over the distinct responses.
+ * @returns {TimedTokenUsage[]} Tokens of each distinct response by kind, with the model of its
+ *   turn, from earliest to latest.
  */
-export function rolloutTokenCount(rollout: string): number {
-  return responseUsages(rollout).reduce((total, { tokens }) => total + tokens, 0);
-}
-
-/**
- * Splits rollout tokens by model response: main session tokens are divided between builds by them.
- * @param {string} rollout Rollout contents in JSONL format.
- * @returns {TokenUsage[]} Tokens of each response by the same rule as `rolloutTokenCount`, from
- *   earliest to latest.
- */
-export function rolloutTokenUsages(rollout: string): TokenUsage[] {
+export function rolloutTokenUsages(rollout: string): TimedTokenUsage[] {
   return responseUsages(rollout).sort((a, b) => a.ts - b.ts);
 }
 

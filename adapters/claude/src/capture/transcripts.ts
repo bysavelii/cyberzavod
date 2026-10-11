@@ -6,14 +6,12 @@ import {
   agentAssignments,
   agentReports,
   assistantTexts,
-  countTokens,
   modelReplies,
   tokenUsages,
 } from "./transcript.ts";
 
 /** Claude Code transcripts for a recording draft. */
 export const claudeTranscripts: SessionTranscripts = transcriptsOf({
-  countTokens,
   tokenUsages,
   modelReplies,
   assistantTexts,

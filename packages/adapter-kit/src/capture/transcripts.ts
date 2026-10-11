@@ -1,11 +1,12 @@
-// What a draft takes from an agent's transcripts: tokens of runs and of the session, the model of
-// each prompt, replies to the human, tasks for stations and their reports. Each adapter parses its
-// own transcript format (`TranscriptFormat`); reading the files and warning about the ones that
-// cannot be read is the same for every agent.
+// What a draft takes from an agent's transcripts: tokens of runs and of the session by model, the
+// model of each prompt, replies to the human, tasks for stations and their reports. Each adapter
+// parses its own transcript format (`TranscriptFormat`); reading the files and warning about the
+// ones that cannot be read is the same for every agent.
 
 import { readFile } from "node:fs/promises";
 import { isNotFound } from "@cyberzavod/storage";
 import type { KitMessages } from "../messages/kit-messages.ts";
+import { tokensByModel } from "./model-tokens.ts";
 import type { RawEvent } from "./raw-event.ts";
 import {
   runTranscriptPaths,
@@ -14,12 +15,15 @@ import {
   stationTranscriptPaths,
   type DraftMeta,
 } from "./to-draft.ts";
-import type {
-  AgentAssignment,
-  AgentReport,
-  ModelReply,
-  TokenUsage,
-  TranscriptText,
+import {
+  isTimedTokenUsage,
+  type AgentAssignment,
+  type AgentReport,
+  type ModelReply,
+  type ModelTokens,
+  type TimedTokenUsage,
+  type TokenUsage,
+  type TranscriptText,
 } from "./transcript-model.ts";
 
 /** Draft data that comes from transcripts rather than from the raw log. */
@@ -51,9 +55,10 @@ export interface SessionTranscripts {
 
 /** How an agent's transcript is understood. Every function is lenient: it skips what it cannot read. */
 export interface TranscriptFormat {
-  /** Tokens of a whole transcript. */
-  countTokens(transcript: string): number;
-  /** Tokens by model message, from earliest to latest. */
+  /**
+   * Tokens by model message, from earliest to latest: with the model and the breakdown by kind.
+   * Every message is here, also the one without a time: a run's tokens do not need it.
+   */
   tokenUsages(transcript: string): TokenUsage[];
   /** Model replies from earliest to latest: a prompt finds its model by them. */
   modelReplies(transcript: string): ModelReply[];
@@ -203,18 +208,20 @@ function textAt(readings: Readings, transcriptPath: string): string | undefined 
   return result?.status === "read" ? result.text : undefined;
 }
 
-// Tokens of each subagent run from its transcript.
+// Tokens of each subagent run from its transcript, by model.
 function tokensOfRuns(
   paths: ReadonlyMap<string, string>,
   readings: Readings,
   format: TranscriptFormat,
-): Map<string, number> {
-  const tokens = new Map<string, number>();
+): Map<string, ModelTokens[]> {
+  const tokens = new Map<string, ModelTokens[]>();
 
   for (const [agentId, transcriptPath] of paths) {
     const transcript = textAt(readings, transcriptPath);
 
-    if (transcript !== undefined) tokens.set(agentId, format.countTokens(transcript));
+    if (transcript !== undefined) {
+      tokens.set(agentId, tokensByModel(format.tokenUsages(transcript)));
+    }
   }
 
   return tokens;
@@ -239,16 +246,18 @@ function modelsOfRuns(
   return models;
 }
 
-// Main session tokens per message, so they can be split across builds.
+// Main session tokens per message, so they can be split across builds. A message without a time
+// cannot be placed between builds and is skipped.
 function usagesOfSession(
   paths: readonly string[],
   readings: Readings,
   format: TranscriptFormat,
-): TokenUsage[] {
+): TimedTokenUsage[] {
   return paths
     .map((transcriptPath) => textAt(readings, transcriptPath))
     .filter((transcript) => transcript !== undefined)
-    .flatMap((transcript) => format.tokenUsages(transcript));
+    .flatMap((transcript) => format.tokenUsages(transcript))
+    .filter(isTimedTokenUsage);
 }
 
 // Without a transcript the draft is still built: prompts will have no model, and there will be no

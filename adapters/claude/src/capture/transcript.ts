@@ -1,22 +1,20 @@
 // Tokens, models and texts from a Claude Code transcript (JSONL). The transcript format is internal
 // and may change, so parsing is lenient: lines it does not understand are skipped.
 //
-// Input, output and cache-write tokens are counted. Cache reads are not counted:
-// it is the same context reread at every step, and they would inflate the counter many times over.
+// A message's tokens are written by kind: input, output, cache writes (5 minutes and 1 hour) and
+// cache reads, since the price differs by kind. Cache reads do not go into the counter
+// (`countedTokensOf`): it is the same context reread at every step, and they would inflate the
+// counter many times over.
 
-import type {
-  AgentAssignment,
-  AgentReport,
-  ModelReply,
-  TokenUsage,
-  TranscriptText,
+import {
+  isTimedTokenUsage,
+  type AgentAssignment,
+  type AgentReport,
+  type ModelReply,
+  type TokenUsage,
+  type TranscriptText,
 } from "@cyberzavod/adapter-kit";
-
-interface Usage {
-  input_tokens?: number;
-  output_tokens?: number;
-  cache_creation_input_tokens?: number;
-}
+import type { TokenBreakdown } from "@cyberzavod/core";
 
 // Claude Code service replies (for example, about the session limit) are marked with the
 // `<synthetic>` model.
@@ -42,7 +40,20 @@ function timestampOf(entry: Record<string, unknown>): number | undefined {
   return Number.isNaN(ts) ? undefined : ts;
 }
 
-function usageOf(line: string): { messageId: string; usage: Usage; ts?: number } | null {
+interface ParsedUsage {
+  messageId: string;
+  usage: Record<string, unknown>;
+  model?: string;
+  ts?: number;
+}
+
+function modelOf(message: Record<string, unknown>): string | undefined {
+  const { model } = message;
+
+  return typeof model === "string" && !model.startsWith(SERVICE_MODEL_PREFIX) ? model : undefined;
+}
+
+function usageOf(line: string): ParsedUsage | null {
   const entry = entryOf(line);
   const message = entry?.message;
 
@@ -53,8 +64,14 @@ function usageOf(line: string): { messageId: string; usage: Usage; ts?: number }
   if (typeof id !== "string" || !isObject(usage)) return null;
 
   const ts = timestampOf(entry);
+  const model = modelOf(message);
 
-  return { messageId: id, usage: usage as Usage, ...(ts === undefined ? {} : { ts }) };
+  return {
+    messageId: id,
+    usage,
+    ...(model === undefined ? {} : { model }),
+    ...(ts === undefined ? {} : { ts }),
+  };
 }
 
 function replyOf(line: string): ModelReply | null {
@@ -62,27 +79,44 @@ function replyOf(line: string): ModelReply | null {
 
   if (entry === null || !isObject(entry.message)) return null;
 
-  const { model } = entry.message;
-
-  if (typeof model !== "string" || model.startsWith(SERVICE_MODEL_PREFIX)) return null;
-
+  const model = modelOf(entry.message);
   const ts = timestampOf(entry);
 
-  return ts === undefined ? null : { ts, model };
+  return model === undefined || ts === undefined ? null : { ts, model };
 }
 
-function tokensOf(usage: Usage): number {
-  return (
-    (usage.input_tokens ?? 0) +
-    (usage.output_tokens ?? 0) +
-    (usage.cache_creation_input_tokens ?? 0)
-  );
+// The transcript format is internal: a count that is not a non-negative integer is taken as zero.
+function countOf(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+// Cache writes by lifetime. Older transcripts have only the total, and it counts as 5 minutes, the
+// default lifetime; so does the part of the total that the lifetimes do not account for.
+function cacheWritesOf(
+  usage: Record<string, unknown>,
+): Pick<TokenBreakdown, "cacheWrite5m" | "cacheWrite1h"> {
+  const byLifetime = isObject(usage.cache_creation) ? usage.cache_creation : {};
+  const total = countOf(usage.cache_creation_input_tokens);
+  const fiveMinutes = countOf(byLifetime.ephemeral_5m_input_tokens);
+  const oneHour = countOf(byLifetime.ephemeral_1h_input_tokens);
+  const unaccounted = Math.max(0, total - fiveMinutes - oneHour);
+
+  return { cacheWrite5m: fiveMinutes + unaccounted, cacheWrite1h: oneHour };
+}
+
+function breakdownOf(usage: Record<string, unknown>): TokenBreakdown {
+  return {
+    input: countOf(usage.input_tokens),
+    output: countOf(usage.output_tokens),
+    cacheRead: countOf(usage.cache_read_input_tokens),
+    ...cacheWritesOf(usage),
+  };
 }
 
 // One model message appears in the transcript several times (in parts of the reply):
 // the last variant for each id counts, and the time is taken from the last part that has one.
-function messageUsages(transcript: string): { ts?: number; tokens: number }[] {
-  const byMessage = new Map<string, { ts?: number; usage: Usage }>();
+function messageUsages(transcript: string): TokenUsage[] {
+  const byMessage = new Map<string, ParsedUsage>();
 
   for (const line of transcript.split("\n")) {
     const parsed = usageOf(line);
@@ -91,35 +125,29 @@ function messageUsages(transcript: string): { ts?: number; tokens: number }[] {
 
     const ts = parsed.ts ?? byMessage.get(parsed.messageId)?.ts;
 
-    byMessage.set(parsed.messageId, { usage: parsed.usage, ...(ts === undefined ? {} : { ts }) });
+    byMessage.set(parsed.messageId, { ...parsed, ...(ts === undefined ? {} : { ts }) });
   }
 
-  return [...byMessage.values()].map(({ ts, usage }) => ({
-    tokens: tokensOf(usage),
+  return [...byMessage.values()].map(({ ts, model, usage }) => ({
+    breakdown: breakdownOf(usage),
+    ...(model === undefined ? {} : { model }),
     ...(ts === undefined ? {} : { ts }),
   }));
 }
 
 /**
- * Counts tokens from a Claude Code session transcript.
+ * Splits transcript tokens by model message: a run's tokens are summed by model, and main session
+ * tokens are divided between builds by their time.
  * @param {string} transcript Transcript contents in JSONL format.
- * @returns {number} Sum of input, output and cache-write tokens.
- */
-export function countTokens(transcript: string): number {
-  return messageUsages(transcript).reduce((total, { tokens }) => total + tokens, 0);
-}
-
-/**
- * Splits transcript tokens by model message: main session tokens are divided between builds
- * by them.
- * @param {string} transcript Transcript contents in JSONL format.
- * @returns {TokenUsage[]} Tokens of each message by the same rules as `countTokens`,
- *   from earliest to latest; messages without a time are skipped.
+ * @returns {TokenUsage[]} Tokens of each message by kind, with its model (not a service one) and
+ *   time if the transcript has them; messages with a time first, from earliest to latest.
  */
 export function tokenUsages(transcript: string): TokenUsage[] {
-  return messageUsages(transcript)
-    .flatMap(({ ts, tokens }) => (ts === undefined ? [] : [{ ts, tokens }]))
-    .sort((a, b) => a.ts - b.ts);
+  const messages = messageUsages(transcript);
+  const timed = messages.filter(isTimedTokenUsage).sort((a, b) => a.ts - b.ts);
+  const untimed = messages.filter((usage) => !isTimedTokenUsage(usage));
+
+  return [...timed, ...untimed];
 }
 
 /**

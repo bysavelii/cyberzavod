@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { RecordError, type RecordSource } from "@cyberzavod/core";
+import {
+  RecordError,
+  type RecordSource,
+  type SessionRecord,
+  type UsageEvent,
+} from "@cyberzavod/core";
 import { KitError } from "../errors.ts";
 import { KIT_MESSAGES } from "../messages/catalog.ts";
 import {
@@ -25,6 +30,14 @@ import {
   intervention,
   SECOND_BUILD_ID,
 } from "./draft.fixtures.ts";
+
+function timesIn(recording: SessionRecord | undefined): number[] {
+  return recording?.data.events.map((event) => event.t) ?? [];
+}
+
+function usagesIn(recording: SessionRecord | undefined): UsageEvent[] {
+  return recording?.data.events.filter((event) => event.type === "usage") ?? [];
+}
 
 function thrownBy(act: () => unknown): unknown {
   try {
@@ -1308,10 +1321,13 @@ describe("publishDraft: несколько сборок", () => {
     const recordings = publishDraft(draft, SOURCE);
 
     const tokens = recordings.map((recording) =>
-      recording.data.events.flatMap((event) => (event.type === "usage" ? [event.tokens] : [])),
+      recording.data.events.reduce(
+        (sum, event) => sum + (event.type === "usage" ? event.tokens : 0),
+        0,
+      ),
     );
 
-    expect(tokens).toEqual([[822], [370]]);
+    expect(tokens).toEqual([822, 370]);
   });
 
   it("даёт в сумме по записям столько токенов, сколько в черновике", () => {
@@ -1327,15 +1343,109 @@ describe("publishDraft: несколько сборок", () => {
     expect(inRecordings).toBe(inDraft);
   });
 
-  it("ставит usage перед build_end и один раз", () => {
+  it("оставляет usage на своих местах, а не складывает их перед build_end", () => {
+    const draft = interleavedDraft();
+
+    const [, recording] = publishDraft(draft, SOURCE);
+
+    expect(recording?.data.events.map((event) => event.type)).toEqual([
+      "build_start",
+      "prompt",
+      "usage",
+      "stage_enter",
+      "message",
+      "usage",
+      "stage_enter",
+      "usage",
+      "message",
+      "build_end",
+    ]);
+  });
+
+  it("оставляет модель и разбивку usage и не пишет в запись тег запуска", () => {
+    const draft = interleavedDraft();
+    const breakdown = {
+      input: 20,
+      output: 100,
+      cacheRead: 5_000,
+      cacheWrite5m: 70,
+      cacheWrite1h: 10,
+    };
+
+    draft.events = draft.events.map((event) =>
+      event.type === "usage" && event.run === "b1"
+        ? { ...event, tokens: 200, model: "claude-sonnet-5-5", breakdown }
+        : event,
+    );
+
+    const [, recording] = publishDraft(draft, SOURCE);
+
+    expect(usagesIn(recording)).toContainEqual({
+      t: 18_000,
+      type: "usage",
+      tokens: 200,
+      model: "claude-sonnet-5-5",
+      breakdown,
+    });
+  });
+
+  it("публикует usage старого черновика без модели и разбивки как есть", () => {
     const draft = interleavedDraft();
 
     const [recording] = publishDraft(draft, SOURCE);
 
-    expect(recording?.data.events.slice(-2).map((event) => event.type)).toEqual([
-      "usage",
-      "build_end",
-    ]);
+    expect(
+      usagesIn(recording).every((usage) => !("model" in usage) && !("breakdown" in usage)),
+    ).toBe(true);
+  });
+
+  it("ставит usage до первого события сборки в её начало", () => {
+    const draft = interleavedDraft();
+    const secondPrompt = draft.events.findIndex(
+      (event) => event.type === "draft_prompt" && event.build === SECOND_BUILD_ID,
+    );
+
+    draft.events.splice(secondPrompt, 0, { t: 1_500, type: "usage", tokens: 1, run: "b1" });
+
+    const [, recording] = publishDraft(draft, SOURCE);
+
+    expect(usagesIn(recording)[0]?.t).toBe(0);
+    expect(timesIn(recording)).toEqual(timesIn(recording).toSorted((a, b) => a - b));
+  });
+
+  it("не ставит usage внутри сжатой паузы позже следующего события", () => {
+    const draft = interleavedDraft();
+    const lastEventBeforeWaiting = 31_000;
+    const insideWaiting = lastEventBeforeWaiting + IDLE_GAP_MS + 10_000;
+    const nextWindow = draft.events.findIndex((event) => event.t >= 200_000);
+
+    draft.events.splice(nextWindow, 0, { t: insideWaiting, type: "usage", tokens: 1, run: "a1" });
+
+    const [recording] = publishDraft(draft, SOURCE);
+
+    expect(timesIn(recording)).toEqual(timesIn(recording).toSorted((a, b) => a - b));
+  });
+
+  it("не ставит usage позже конца сборки", () => {
+    const draft = interleavedDraft();
+
+    draft.events.push({ t: 900_000, type: "usage", tokens: 1, run: "b2" });
+
+    const [, recording] = publishDraft(draft, SOURCE);
+
+    expect(usagesIn(recording).at(-1)?.t).toBe(timesIn(recording).at(-1));
+  });
+
+  it("ищет утечки в модели usage", () => {
+    const draft = interleavedDraft();
+
+    draft.events = draft.events.map((event) =>
+      event.type === "usage" && event.run === "b1" ? { ...event, model: "gpt-203.0.113.7" } : event,
+    );
+
+    const act = () => publishBuild(draft, SECOND_BUILD_ID, SOURCE);
+
+    expect(act).toThrow(/IP address/);
   });
 
   it("берёт итог сборки из её последней проверки: провал соседней сборки не мешает", () => {

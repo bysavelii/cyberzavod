@@ -1,19 +1,36 @@
+import { countedTokensOf, NO_BREAKDOWN, type TokenBreakdown } from "@cyberzavod/core";
 import { describe, expect, it } from "vitest";
 import {
   agentAssignments,
   agentReports,
   assistantTexts,
-  countTokens,
   modelReplies,
   tokenUsages,
 } from "./transcript.ts";
 
-function assistantLine(id: string, usage: Record<string, number>): string {
-  return JSON.stringify({ type: "assistant", message: { id, usage } });
+function assistantLine(id: string, usage: Record<string, unknown>, model?: string): string {
+  return JSON.stringify({ type: "assistant", message: { id, usage, model } });
 }
 
-describe("countTokens", () => {
-  it("складывает токены сообщений без чтений из кеша", () => {
+function timedAssistantLine(
+  id: string,
+  second: number,
+  usage: Record<string, unknown>,
+  model?: string,
+): string {
+  return JSON.stringify({
+    type: "assistant",
+    timestamp: `2026-10-04T10:00:${String(second).padStart(2, "0")}.000Z`,
+    message: { id, usage, model },
+  });
+}
+
+function breakdownOfTokens(patch: Partial<TokenBreakdown>): TokenBreakdown {
+  return { ...NO_BREAKDOWN, ...patch };
+}
+
+describe("tokenUsages", () => {
+  it("разбивает токены по видам, запись в кэш без разбивки идёт в пятиминутную", () => {
     const transcript = [
       JSON.stringify({ type: "user", message: { content: "привет" } }),
       assistantLine("m1", {
@@ -22,23 +39,139 @@ describe("countTokens", () => {
         cache_creation_input_tokens: 100,
         cache_read_input_tokens: 5000,
       }),
-      assistantLine("m2", { input_tokens: 1, output_tokens: 2 }),
     ].join("\n");
 
-    const tokens = countTokens(transcript);
+    const usages = tokenUsages(transcript);
 
-    expect(tokens).toBe(133);
+    expect(usages).toEqual([
+      {
+        breakdown: {
+          input: 10,
+          output: 20,
+          cacheRead: 5000,
+          cacheWrite5m: 100,
+          cacheWrite1h: 0,
+        },
+      },
+    ]);
   });
 
-  it("считает повторы одного сообщения один раз по последнему варианту", () => {
+  it("берёт запись в кэш по времени жизни из cache_creation", () => {
+    const transcript = assistantLine("m1", {
+      input_tokens: 1,
+      cache_creation_input_tokens: 90,
+      cache_creation: { ephemeral_5m_input_tokens: 30, ephemeral_1h_input_tokens: 60 },
+    });
+
+    const usages = tokenUsages(transcript);
+
+    expect(usages).toEqual([
+      { breakdown: breakdownOfTokens({ input: 1, cacheWrite5m: 30, cacheWrite1h: 60 }) },
+    ]);
+  });
+
+  it("считает недостающую часть cache_creation нулём", () => {
+    const transcript = assistantLine("m1", {
+      cache_creation_input_tokens: 60,
+      cache_creation: { ephemeral_1h_input_tokens: 60 },
+    });
+
+    const usages = tokenUsages(transcript);
+
+    expect(usages).toEqual([{ breakdown: breakdownOfTokens({ cacheWrite1h: 60 }) }]);
+  });
+
+  it("относит к пятиминутной записи часть общей записи в кэш, которой нет в cache_creation", () => {
+    const transcript = assistantLine("m1", {
+      cache_creation_input_tokens: 100,
+      cache_creation: { ephemeral_5m_input_tokens: 30, ephemeral_1h_input_tokens: 60 },
+    });
+
+    const usages = tokenUsages(transcript);
+
+    expect(usages).toEqual([
+      { breakdown: breakdownOfTokens({ cacheWrite5m: 40, cacheWrite1h: 60 }) },
+    ]);
+  });
+
+  it("считает нулём отрицательные, дробные и нечисловые количества токенов", () => {
+    const transcript = assistantLine("m1", {
+      input_tokens: -5,
+      output_tokens: 1.5,
+      cache_read_input_tokens: "много",
+      cache_creation_input_tokens: Number.MAX_SAFE_INTEGER + 1,
+      cache_creation: { ephemeral_1h_input_tokens: 7 },
+    });
+
+    const usages = tokenUsages(transcript);
+
+    expect(usages).toEqual([{ breakdown: breakdownOfTokens({ cacheWrite1h: 7 }) }]);
+  });
+
+  it("даёт модель сообщения и не даёт служебную", () => {
     const transcript = [
-      assistantLine("m1", { input_tokens: 10, output_tokens: 5 }),
-      assistantLine("m1", { input_tokens: 10, output_tokens: 50 }),
+      assistantLine("m1", { output_tokens: 1 }, "claude-opus-5-5"),
+      assistantLine("m2", { output_tokens: 2 }, "<synthetic>"),
     ].join("\n");
 
-    const tokens = countTokens(transcript);
+    const usages = tokenUsages(transcript);
 
-    expect(tokens).toBe(60);
+    expect(usages).toEqual([
+      { model: "claude-opus-5-5", breakdown: breakdownOfTokens({ output: 1 }) },
+      { breakdown: breakdownOfTokens({ output: 2 }) },
+    ]);
+  });
+
+  it("берёт последний вариант сообщения и время последней части", () => {
+    const transcript = [
+      timedAssistantLine("m1", 1, { input_tokens: 10, output_tokens: 5 }, "claude-opus-5-5"),
+      timedAssistantLine("m2", 4, { output_tokens: 7, cache_read_input_tokens: 9_000 }),
+      timedAssistantLine("m1", 3, { input_tokens: 10, output_tokens: 50 }, "claude-opus-5-5"),
+    ].join("\n");
+
+    const usages = tokenUsages(transcript);
+
+    expect(usages).toEqual([
+      {
+        ts: Date.parse("2026-10-04T10:00:03.000Z"),
+        model: "claude-opus-5-5",
+        breakdown: breakdownOfTokens({ input: 10, output: 50 }),
+      },
+      {
+        ts: Date.parse("2026-10-04T10:00:04.000Z"),
+        breakdown: breakdownOfTokens({ output: 7, cacheRead: 9_000 }),
+      },
+    ]);
+  });
+
+  it("даёт счётчик, который не учитывает чтение кэша", () => {
+    const transcript = [
+      timedAssistantLine("m1", 1, {
+        input_tokens: 10,
+        output_tokens: 20,
+        cache_creation_input_tokens: 100,
+        cache_read_input_tokens: 5000,
+      }),
+      timedAssistantLine("m2", 2, { input_tokens: 1, output_tokens: 2 }),
+    ].join("\n");
+
+    const usages = tokenUsages(transcript);
+
+    expect(usages.reduce((sum, { breakdown }) => sum + countedTokensOf(breakdown), 0)).toBe(133);
+  });
+
+  it("отдаёт сообщения без времени после остальных", () => {
+    const transcript = [
+      assistantLine("m1", { output_tokens: 7 }),
+      timedAssistantLine("m2", 2, { output_tokens: 3 }),
+    ].join("\n");
+
+    const usages = tokenUsages(transcript);
+
+    expect(usages.map(({ ts, breakdown }) => [ts !== undefined, breakdown.output])).toEqual([
+      [true, 3],
+      [false, 7],
+    ]);
   });
 
   it("пропускает непонятные строки", () => {
@@ -49,57 +182,9 @@ describe("countTokens", () => {
       assistantLine("m1", { output_tokens: 7 }),
     ].join("\n");
 
-    const tokens = countTokens(transcript);
-
-    expect(tokens).toBe(7);
-  });
-});
-
-function timedAssistantLine(id: string, second: number, usage: Record<string, number>): string {
-  return JSON.stringify({
-    type: "assistant",
-    timestamp: `2026-10-04T10:00:${String(second).padStart(2, "0")}.000Z`,
-    message: { id, usage },
-  });
-}
-
-describe("tokenUsages", () => {
-  it("даёт токены каждого сообщения: последний вариант и время последней части", () => {
-    const transcript = [
-      timedAssistantLine("m1", 1, { input_tokens: 10, output_tokens: 5 }),
-      timedAssistantLine("m2", 4, { output_tokens: 7, cache_read_input_tokens: 9_000 }),
-      timedAssistantLine("m1", 3, { input_tokens: 10, output_tokens: 50 }),
-    ].join("\n");
-
     const usages = tokenUsages(transcript);
 
-    expect(usages).toEqual([
-      { ts: Date.parse("2026-10-04T10:00:03.000Z"), tokens: 60 },
-      { ts: Date.parse("2026-10-04T10:00:04.000Z"), tokens: 7 },
-    ]);
-  });
-
-  it("даёт в сумме столько же, сколько countTokens", () => {
-    const transcript = [
-      timedAssistantLine("m1", 1, { input_tokens: 10, cache_creation_input_tokens: 100 }),
-      timedAssistantLine("m2", 2, { output_tokens: 20 }),
-      timedAssistantLine("m2", 3, { output_tokens: 25 }),
-    ].join("\n");
-
-    const usages = tokenUsages(transcript);
-
-    expect(usages.reduce((sum, { tokens }) => sum + tokens, 0)).toBe(countTokens(transcript));
-  });
-
-  it("пропускает сообщения без времени", () => {
-    const transcript = [
-      assistantLine("m1", { output_tokens: 7 }),
-      timedAssistantLine("m2", 2, { output_tokens: 3 }),
-    ].join("\n");
-
-    const usages = tokenUsages(transcript);
-
-    expect(usages.map(({ tokens }) => tokens)).toEqual([3]);
+    expect(usages).toEqual([{ breakdown: breakdownOfTokens({ output: 7 }) }]);
   });
 });
 

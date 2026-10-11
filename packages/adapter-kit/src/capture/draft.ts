@@ -14,13 +14,14 @@ import {
   type InterventionEvent,
   type InterventionReason,
   type StageEnterEvent,
+  type UsageEvent,
   type SessionRecord,
   type RecordError,
   type Speaker,
   type Stage,
 } from "@cyberzavod/core";
 import { KitError } from "../errors.ts";
-import { buildTimeline, eventBuilds } from "./builds.ts";
+import { buildTimeline, eventBuilds, type BuildTimeline } from "./builds.ts";
 import { findLeaks } from "./leaks.ts";
 import { withOptional } from "./raw-event.ts";
 
@@ -698,14 +699,26 @@ function toPublishedMessage(
   return { t, type: "message", from, to, line, text };
 }
 
+// Tokens stay where the draft put them, so a stage's cost can be told from the recording. They do
+// not take part in the build time: one may stand before the build's first event or inside a
+// shrunk pause, so its time is held between the previous published event and the build end.
+function toPublishedUsage(
+  usage: UsageEvent,
+  previousT: number,
+  timeline: BuildTimeline,
+): UsageEvent {
+  const { tokens, model, breakdown } = usage;
+  const t = Math.min(Math.max(timeline.at(usage.t), previousT), timeline.end);
+
+  return withOptional<UsageEvent>({ t, type: "usage", tokens }, { model, breakdown });
+}
+
 // A merged prompt went into the previous unmerged one, so without that one it has nowhere to go.
 // A repeat of the stage the build is already at does not go into the recording: two runs in a row
 // gave it.
-// `at` converts event time: from the build's first event and without long pauses.
-function toPublishedEvents(
-  events: readonly DraftEvent[],
-  at: (t: number) => number,
-): SessionEvent[] {
+// `timeline` converts event time: from the build's first event and without long pauses.
+function toPublishedEvents(events: readonly DraftEvent[], timeline: BuildTimeline): SessionEvent[] {
+  const { at } = timeline;
   const published: SessionEvent[] = [];
   let hasPrompt = false;
   let currentStage: Stage | undefined;
@@ -757,11 +770,14 @@ function toPublishedEvents(
         });
 
         return;
+      case "usage":
+        published.push(toPublishedUsage(event, published.at(-1)?.t ?? 0, timeline));
+
+        return;
       case "draft_run":
       case "draft_check":
       case "build_start":
       case "build_end":
-      case "usage":
         return;
       default:
         return event satisfies never;
@@ -785,9 +801,9 @@ function textsOf(event: SessionEvent): string[] {
     case "intervention":
       return [event.line, event.text];
     case "stage_enter":
+    case "usage":
       return event.model === undefined ? [] : [event.model];
     case "build_start":
-    case "usage":
     case "build_end":
       return [];
     default:
@@ -801,12 +817,6 @@ function textsOf(event: SessionEvent): string[] {
 // successful.
 function checksPassed(events: readonly DraftEvent[]): boolean {
   return events.findLast((event) => event.type === "draft_check")?.ok ?? true;
-}
-
-function totalTokens(events: readonly DraftEvent[]): number | undefined {
-  const usages = events.filter((event) => event.type === "usage");
-
-  return usages.length === 0 ? undefined : usages.reduce((sum, { tokens }) => sum + tokens, 0);
 }
 
 function buildOf(draft: Draft, buildId: string): DraftBuild {
@@ -846,8 +856,9 @@ function checkNoLeaks({ data }: SessionRecord, buildId: string): void {
 /**
  * Turns one build of an edited draft into a recording for the site: only events of
  * this build, time from its first event and without long pauses, without the original texts of
- * prompts and messages, without the original texts of interventions, without `project` tags,
- * without merged prompts and draft service events.
+ * prompts and messages, without the original texts of interventions, without `project` and `run`
+ * tags, without merged prompts and draft service events. Token `usage` events stay at their places
+ * with the model and the breakdown: they are not summed.
  * @param {Draft} draft Draft with the title, project, harness version,
  *   clean prompts and messages of the published build filled in.
  * @param {string} buildId Id of the published build.
@@ -869,13 +880,9 @@ export function publishBuild(draft: Draft, buildId: string, source: RecordSource
     throw new KitError((messages) => messages.errors.buildHasNoEvents(buildId));
   }
 
-  const tokens = totalTokens(events);
-  const usage: SessionEvent[] =
-    tokens === undefined ? [] : [{ t: timeline.end, type: "usage", tokens }];
   const published: SessionEvent[] = [
     { t: 0, type: "build_start" },
-    ...toPublishedEvents(events, timeline.at),
-    ...usage,
+    ...toPublishedEvents(events, timeline),
     { t: timeline.end, type: "build_end", ok: checksPassed(events) },
   ];
   const record = parseRecord({

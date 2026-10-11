@@ -1,3 +1,5 @@
+import type { TimedTokenUsage } from "@cyberzavod/adapter-kit";
+import { countedTokensOf } from "@cyberzavod/core";
 import { describe, expect, it } from "vitest";
 import { SESSION_ID, SUBAGENT_ID } from "./hook-payload.fixtures.ts";
 import {
@@ -5,7 +7,6 @@ import {
   rolloutAssignments,
   rolloutModelReplies,
   rolloutReports,
-  rolloutTokenCount,
   rolloutTokenUsages,
   rolloutToolOutcomes,
 } from "./rollout.ts";
@@ -75,53 +76,121 @@ describe("rolloutAnswers", () => {
   });
 });
 
-describe("rolloutTokenCount", () => {
-  it("складывает входные без кэша и выходные токены каждого ответа", () => {
-    expect(rolloutTokenCount(sessionRollout())).toBe(40);
-    expect(rolloutTokenCount(finishedReviewerRollout())).toBe(250);
+const OWN_RECORD_TIME = "2026-10-10T08:00:00.000Z";
+
+function usageRecord(responseId: string, usage: Record<string, unknown>) {
+  return line(OWN_RECORD_TIME, "token_usage_record", { response_id: responseId, usage });
+}
+
+function countedTokens(usages: readonly TimedTokenUsage[]): number {
+  return usages.reduce((total, { breakdown }) => total + countedTokensOf(breakdown), 0);
+}
+
+describe("rolloutTokenUsages", () => {
+  it("делит токены по ответам модели по времени и называет модель хода", () => {
+    const usages = rolloutTokenUsages(sessionRollout());
+
+    expect(usages.map(({ model }) => model)).toEqual(Array(4).fill("gpt-5.5"));
+    expect(usages[0]?.ts).toBe(Date.parse("2026-10-10T08:33:11.997Z"));
+    expect(countedTokens(usages)).toBe(40);
+  });
+
+  it("разбивает токены ответа по видам: чтение кэша отдельно от входа", () => {
+    const rollout = rolloutOf([
+      usageRecord("r1", {
+        input_tokens: 1200,
+        cached_input_tokens: 1000,
+        output_tokens: 50,
+        reasoning_output_tokens: 20,
+        cache_write_input_tokens: 0,
+      }),
+    ]);
+
+    const usages = rolloutTokenUsages(rollout);
+
+    expect(usages).toEqual([
+      {
+        ts: Date.parse(OWN_RECORD_TIME),
+        breakdown: { input: 200, output: 50, cacheRead: 1000, cacheWrite5m: 0, cacheWrite1h: 0 },
+      },
+    ]);
+  });
+
+  it("считает токены сабагента без чтения кэша", () => {
+    const usages = rolloutTokenUsages(finishedReviewerRollout());
+
+    expect(countedTokens(usages)).toBe(250);
+    expect(usages.map(({ breakdown }) => breakdown.cacheRead)).toEqual([1000]);
   });
 
   it("считает ответ с одним response_id один раз", () => {
-    const record = line("2026-10-10T08:00:00.000Z", "token_usage_record", {
-      response_id: "same",
-      usage: { input_tokens: 10, cached_input_tokens: 4, output_tokens: 5 },
+    const record = usageRecord("same", {
+      input_tokens: 10,
+      cached_input_tokens: 4,
+      output_tokens: 5,
     });
 
-    expect(rolloutTokenCount(rolloutOf([record, record]))).toBe(11);
+    const usages = rolloutTokenUsages(rolloutOf([record, record]));
+
+    expect(countedTokens(usages)).toBe(11);
   });
 
   it("не уходит в минус, если кэша больше входа", () => {
     const rollout = rolloutOf([
-      line("2026-10-10T08:00:00.000Z", "token_usage_record", {
-        response_id: "odd",
-        usage: { input_tokens: 5, cached_input_tokens: 9, output_tokens: 2 },
+      usageRecord("odd", { input_tokens: 5, cached_input_tokens: 9, output_tokens: 2 }),
+    ]);
+
+    const usages = rolloutTokenUsages(rollout);
+
+    expect(usages.map(({ breakdown }) => breakdown.input)).toEqual([0]);
+    expect(countedTokens(usages)).toBe(2);
+  });
+
+  it("считает нулём отрицательные, дробные и нечисловые количества токенов", () => {
+    const rollout = rolloutOf([
+      usageRecord("odd", {
+        input_tokens: -5,
+        cached_input_tokens: 1.5,
+        output_tokens: "3",
       }),
     ]);
 
-    expect(rolloutTokenCount(rollout)).toBe(2);
+    const usages = rolloutTokenUsages(rollout);
+
+    expect(usages.map(({ breakdown }) => breakdown)).toEqual([
+      { input: 0, output: 0, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0 },
+    ]);
+  });
+
+  it("берёт модель последнего хода перед записью", () => {
+    const rollout = rolloutOf([
+      line("2026-10-10T08:00:00.000Z", "turn_context", { model: "first" }),
+      usageRecord("r1", { output_tokens: 1 }),
+      line("2026-10-10T08:00:05.000Z", "turn_context", { model: "second" }),
+      usageRecord("r2", { output_tokens: 2 }),
+    ]);
+
+    const usages = rolloutTokenUsages(rollout);
+
+    expect(usages.map(({ model }) => model)).toEqual(["first", "second"]);
+  });
+
+  it("оставляет запись без модели, если хода с моделью не было", () => {
+    const rollout = rolloutOf([usageRecord("r1", { output_tokens: 1 })]);
+
+    const usages = rolloutTokenUsages(rollout);
+
+    expect(usages.map((usage) => "model" in usage)).toEqual([false]);
   });
 
   it("не считает записи родителя, скопированные в rollout форка", () => {
-    expect(rolloutTokenCount(forkedReviewerRollout())).toBe(250);
-  });
-
-  it("равен нулю без записей об использовании", () => {
-    expect(rolloutTokenCount(GARBAGE)).toBe(0);
-  });
-});
-
-describe("rolloutTokenUsages", () => {
-  it("не делит записи родителя, скопированные в rollout форка", () => {
     const usages = rolloutTokenUsages(forkedReviewerRollout());
 
-    expect(usages.map(({ tokens }) => tokens)).toEqual([250]);
+    expect(usages.map(({ breakdown }) => countedTokensOf(breakdown))).toEqual([250]);
   });
 
-  it("делит токены по ответам модели по времени", () => {
-    const usages = rolloutTokenUsages(sessionRollout());
-
-    expect(usages.map(({ tokens }) => tokens)).toEqual([10, 10, 10, 10]);
-    expect(usages[0]?.ts).toBe(Date.parse("2026-10-10T08:33:11.997Z"));
+  it("пустой без записей об использовании", () => {
+    expect(rolloutTokenUsages(GARBAGE)).toEqual([]);
   });
 });
 

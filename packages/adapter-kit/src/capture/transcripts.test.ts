@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { NO_BREAKDOWN, type TokenBreakdown } from "@cyberzavod/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KIT_MESSAGES } from "../messages/catalog.ts";
 import type { RawEvent } from "./raw-event.ts";
@@ -14,11 +15,15 @@ import {
 
 let directory: string;
 
+// The transcript's length as output tokens: a different text is a different breakdown.
+function outputOf(transcript: string): TokenBreakdown {
+  return { ...NO_BREAKDOWN, output: transcript.length };
+}
+
 // A format that reads a transcript of lines `key value`.
 function lineFormat(overrides: Partial<TranscriptFormat> = {}): TranscriptFormat {
   return {
-    countTokens: (transcript) => transcript.length,
-    tokenUsages: (transcript) => [{ ts: 10, tokens: transcript.length }],
+    tokenUsages: (transcript) => [{ ts: 10, model: "gpt-x", breakdown: outputOf(transcript) }],
     modelReplies: () => [{ ts: 5, model: "gpt-x" }],
     assistantTexts: () => [{ ts: 6, text: "готово" }],
     agentAssignments: () => [],
@@ -114,9 +119,9 @@ describe("transcriptsOf", () => {
     const { meta } = await transcripts.inputsOf(sessionEvents(session, station), KIT_MESSAGES.en);
 
     expect(meta).toEqual({
-      runTokens: new Map([["a1", "станция".length]]),
+      runTokens: new Map([["a1", [{ model: "gpt-x", breakdown: outputOf("станция") }]]]),
       runModels: new Map([["a1", "gpt-x"]]),
-      sessionUsages: [{ ts: 10, tokens: "сессия".length }],
+      sessionUsages: [{ ts: 10, model: "gpt-x", breakdown: outputOf("сессия") }],
       replies: [{ ts: 5, model: "gpt-x" }],
       answers: [{ ts: 6, text: "готово" }],
       assignments: [],
@@ -139,8 +144,31 @@ describe("transcriptsOf", () => {
 
     const { meta } = await transcripts.inputsOf(events, KIT_MESSAGES.en);
 
-    expect(meta.runTokens).toEqual(new Map([["a1", "станция".length]]));
+    expect(meta.runTokens).toEqual(
+      new Map([["a1", [{ model: "gpt-x", breakdown: outputOf("станция") }]]]),
+    );
     expect(meta.reports).toEqual([{ ts: 7, agentId: "a1", text: "станция" }]);
+  });
+
+  it("суммирует токены запуска по моделям, а сообщения без времени не отдаёт сессии", async () => {
+    const session = await transcriptFile("session.jsonl", "сессия");
+    const station = await transcriptFile("station.jsonl", "станция");
+    const tokenUsages = () => [
+      { ts: 3, model: "gpt-a", breakdown: { ...NO_BREAKDOWN, input: 1, output: 2 } },
+      { model: "gpt-b", breakdown: { ...NO_BREAKDOWN, output: 4 } },
+      { ts: 5, model: "gpt-a", breakdown: { ...NO_BREAKDOWN, input: 10, cacheRead: 7 } },
+      { ts: 6, breakdown: { ...NO_BREAKDOWN, output: 8 } },
+    ];
+    const transcripts = transcriptsOf(lineFormat({ tokenUsages }));
+
+    const { meta } = await transcripts.inputsOf(sessionEvents(session, station), KIT_MESSAGES.en);
+
+    expect(meta.runTokens.get("a1")).toEqual([
+      { model: "gpt-a", breakdown: { ...NO_BREAKDOWN, input: 11, output: 2, cacheRead: 7 } },
+      { model: "gpt-b", breakdown: { ...NO_BREAKDOWN, output: 4 } },
+      { breakdown: { ...NO_BREAKDOWN, output: 8 } },
+    ]);
+    expect(meta.sessionUsages.map(({ ts }) => ts)).toEqual([3, 5, 6]);
   });
 
   it("берёт модель запуска из первого ответа его транскрипта", async () => {
