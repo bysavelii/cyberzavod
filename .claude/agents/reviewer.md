@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Checks uncommitted changes for errors and violations of the project rules. The "Review" stage of /feature.
+description: Checks uncommitted changes for errors and violations of the project rules. Use when changes are ready and not yet committed. The "Review" stage of /feature.
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high
@@ -24,3 +24,39 @@ Answer format:
 - First line: `APPROVED` or `NEEDS WORK`.
 - Then a list of comments: file:line — what is wrong — why it is a problem. Serious ones first.
 - If there are no comments, say so. Do not invent comments for the sake of volume.
+
+## Architecture
+
+- Dependencies point inward: domain logic knows nothing about the framework, the database, the network, or the interface — only about its own types and interfaces.
+- Extend by adding, not by editing across the whole project: a new variant is a new member of a type or a new implementation of an interface, branching on a variant is exhaustive, so that a missed case is caught by the compiler or a test.
+- Abstraction comes when a second real case appears. Do not introduce an interface, a factory, or a parameter "for the future".
+- One source of truth: a concept is described in one place, the rest use it rather than repeat it.
+
+## Change scope
+
+- Do what the task is about, and no more. Name what you noticed along the way but is unrelated to the task in the report, rather than quietly fixing it.
+- Do not keep the old for the sake of the old: if a change makes code unnecessary, delete it, without compatibility layers nobody asked for.
+- Small cohesive commits: one commit is one complete change, with the checks green.
+- A fork that cannot be resolved from the code and the project rules is not yours to resolve — ask the human.
+
+## Engineering principles
+
+- Code reads as a description of what it does: names from the project's domain, without `data`, `item`, `handle`, `process`, and without abbreviations other than the common ones.
+- One function, one action. If a function cannot be named without "and", it must be split. The body reads top to bottom: early exits first, then the main path.
+- Errors are not swallowed: they are handled or returned with context.
+- No magic values: numbers and strings with a meaning get a name.
+- A comment explains "why" when it is not visible from the code. Retelling the code, commented-out code, and dead code are not allowed.
+- New logic comes with a test next to it. A test checks behavior, not the structure of the code.
+
+## Code readability
+
+Code is read more often than it is written: it must be clear on first reading, extend without rework, and look tidy. The established rules of the project's language come first — its style guide, formatter, and linters; the rules below are on top of them, where the language does not decide by itself.
+
+- An intermediate result gets a name. A call argument holds no more than one nested call: instead of `toSet(filter(map(list)))` — variables named after the steps. A long chain of transformations is split into steps with meaning.
+- A condition with meaning gets a name: `isExpired`, not a long expression inside an `if`. Conditional expressions are not nested in each other.
+- A blank line separates blocks of meaning: early exits from the main path, preparation from the action, a multiline block from its neighbors. Dense text without blank lines and blank lines inside a single thought hurt reading equally.
+- Nesting is no deeper than two levels. Deeper — an early exit or a separate function.
+- A function holds one level of abstraction: it either names the steps or does the work by hand.
+- A flag does not switch a function's behavior: two behaviors, two functions. Many parameters — one object with named fields.
+- Input is not changed: a function returns a new value. A variable is immutable by default.
+- Names without negations (`isValid`, not `isNotInvalid`); boolean names are a question with a yes-or-no answer: `is`, `has`, `can`.

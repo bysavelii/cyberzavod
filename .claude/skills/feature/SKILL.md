@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Runs a task through the default workflow — plan, code, review, verify, record; each role has its own model. Usage: /feature <task>.
+description: "Runs a task through the default workflow — plan, code, review, verify, record; each role has its own model. Usage: /feature <task>."
 argument-hint: <task>
 disable-model-invocation: true
 ---

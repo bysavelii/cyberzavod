@@ -2,20 +2,32 @@ import type { Harness, ProjectConfig, StageGuide } from "@cyberzavod/core";
 import { describe, expect, it } from "vitest";
 import {
   ownStageSections,
+  rolePrinciples,
   stageGuidesOf,
   stageTable,
   workingRulesParagraphs,
 } from "./workflow-text.ts";
 
 function guide(stage: StageGuide["stage"], title: string, role?: string): StageGuide {
-  const base = { stage, title, description: `${title}.`, body: `Text of ${title}.` };
+  const base = {
+    stage,
+    title,
+    description: `${title}.`,
+    body: `Text of ${title}.`,
+    skill: `${stage}-stage`,
+  };
 
   return role === undefined ? base : { ...base, role: { name: role, access: "read" } };
 }
 
 function harness(): Harness {
   return {
-    principles: [{ name: "safety", text: "## Safety" }],
+    lead: { name: "feature", description: "Lead.", metadata: {}, body: "Lead.", files: [] },
+    skills: [],
+    principles: [
+      { name: "change-scope", text: "## Change scope", isAlwaysOn: false },
+      { name: "safety", text: "## Safety", isAlwaysOn: true },
+    ],
     stages: {
       planning: guide("planning", "Plan", "analyst"),
       implementation: guide("implementation", "Code", "coder"),
@@ -24,7 +36,6 @@ function harness(): Harness {
       record: guide("record", "Record"),
     },
     workflows: [],
-    conductor: "Lead.",
   };
 }
 
@@ -56,6 +67,7 @@ describe("workingRulesParagraphs", () => {
     workflow: { ...WORKFLOW, stages: [...WORKFLOW.stages] },
     featureCall: "/feature <task>",
     agentsDirectory: ".agents/",
+    skillsDirectory: ".skills/",
   });
 
   it("называет маршрут, вызов задачи, каталог ролей и версию harness", () => {
@@ -67,10 +79,32 @@ describe("workingRulesParagraphs", () => {
     expect(process).toContain("`.agents/`");
   });
 
-  it("перечисляет проверки проекта и затем принципы", () => {
+  it("перечисляет проверки проекта, затем принципы, которые действуют всегда", () => {
     const paragraphs = workingRulesParagraphs(source(["npm test", "npm run lint"]));
 
     expect(paragraphs[2]).toContain("- `npm test`\n- `npm run lint`");
+    expect(paragraphs[3]).toBe("## Safety");
+    expect(paragraphs).not.toContain("## Change scope");
+  });
+
+  it("говорит, в каком скилле остальные принципы", () => {
+    const paragraphs = workingRulesParagraphs(source([]));
+
+    expect(paragraphs.at(-1)).toContain("change scope");
+    expect(paragraphs.at(-1)).toContain("`.skills/principles/SKILL.md`");
+  });
+
+  it("не ссылается на скилл, если все принципы действуют всегда", () => {
+    const allAlwaysOn = harness().principles.map((principle) => ({
+      ...principle,
+      isAlwaysOn: true,
+    }));
+
+    const paragraphs = workingRulesParagraphs({
+      ...source([]),
+      harness: { ...harness(), principles: allAlwaysOn },
+    });
+
     expect(paragraphs.at(-1)).toBe("## Safety");
   });
 
@@ -79,6 +113,14 @@ describe("workingRulesParagraphs", () => {
 
     expect(paragraphs[2]).toContain("verification.commands");
     expect(paragraphs[2]).toContain("not set");
+  });
+});
+
+describe("rolePrinciples", () => {
+  it("отдаёт роли принципы, которых нет в постоянных правилах", () => {
+    const principles = rolePrinciples(harness());
+
+    expect(principles).toEqual(["## Change scope"]);
   });
 });
 

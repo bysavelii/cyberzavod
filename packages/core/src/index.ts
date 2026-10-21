@@ -3,16 +3,28 @@
 
 export {
   HarnessError,
+  LEAD_SKILL,
   parseHarness,
-  parseStageGuide,
+  PRINCIPLES_SKILL,
   STAGE_ACCESS,
   type Harness,
   type HarnessFiles,
+  type HarnessSkill,
   type Principle,
+  type SkillFile,
   type StageAccess,
   type StageGuide,
   type StageRole,
 } from "./harness.ts";
+export {
+  parseSkillDocument,
+  SKILL_FILE,
+  SkillError,
+  skillFrontmatter,
+  yamlString,
+  type SkillDocument,
+  type SkillFrontmatter,
+} from "./skill.ts";
 export {
   STAGES,
   WorkflowError,

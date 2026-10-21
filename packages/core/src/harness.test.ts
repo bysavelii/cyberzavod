@@ -1,130 +1,220 @@
 import { describe, expect, it } from "vitest";
-import { HarnessError, parseHarness, parseStageGuide, type HarnessFiles } from "./harness.ts";
-import { STAGES } from "./stage.ts";
+import { HarnessError, parseHarness, type HarnessFiles } from "./harness.ts";
+import { STAGES, type Stage } from "./stage.ts";
 
-function stageFile(header: string, body = "Текст этапа."): string {
+function skillText(header: string, body = "Текст скилла."): string {
   return `---\n${header}\n---\n\n${body}\n`;
 }
 
-function roleHeader(): string {
-  return "role: analyst\ntitle: Постановка\ndescription: Ставит задачу.\naccess: read";
+function stageSkill(stage: Stage, metadata = `  stage: ${stage}\n  title: Этап ${stage}`): string {
+  return skillText(`name: ${stage}-stage\ndescription: Делает ${stage}.\nmetadata:\n${metadata}`);
 }
 
-describe("parseStageGuide", () => {
-  it("читает шапку с ролью и текст этапа", () => {
-    const text = stageFile(roleHeader());
-
-    const guide = parseStageGuide("planning", text);
-
-    expect(guide).toEqual({
-      stage: "planning",
-      title: "Постановка",
-      description: "Ставит задачу.",
-      role: { name: "analyst", access: "read" },
-      body: "Текст этапа.",
-    });
-  });
-
-  it("читает этап без роли", () => {
-    const text = stageFile("title: Фиксация\ndescription: Фиксирует работу.");
-
-    const guide = parseStageGuide("record", text);
-
-    expect(guide.role).toBeUndefined();
-  });
-
-  it("читает файл с переводами строк Windows", () => {
-    const text = stageFile(roleHeader()).replace(/\n/g, "\r\n");
-
-    const guide = parseStageGuide("planning", text);
-
-    expect(guide.body).toBe("Текст этапа.");
-  });
-
-  it("отклоняет файл без шапки", () => {
-    const act = () => parseStageGuide("planning", "Просто текст.");
-
-    expect(act).toThrow(HarnessError);
-  });
-
-  it("отклоняет шапку без описания", () => {
-    const act = () => parseStageGuide("record", stageFile("title: Фиксация"));
-
-    expect(act).toThrow(/title and description/);
-  });
-
-  it("отклоняет роль без доступа", () => {
-    const text = stageFile("role: coder\ntitle: Код\ndescription: Пишет код.");
-
-    const act = () => parseStageGuide("implementation", text);
-
-    expect(act).toThrow(/access/);
-  });
-
-  it("отклоняет имя роли не латиницей", () => {
-    const text = stageFile("role: Кодер\ntitle: Код\ndescription: Пишет код.\naccess: write");
-
-    const act = () => parseStageGuide("implementation", text);
-
-    expect(act).toThrow(/role/);
-  });
-
-  it("отклоняет строку шапки, которая не поле", () => {
-    const text = stageFile("title: Код\nэто не поле\ndescription: Пишет код.");
-
-    const act = () => parseStageGuide("implementation", text);
-
-    expect(act).toThrow(/not a field/);
-  });
-});
+function principlesSkill(): string {
+  return skillText(
+    "name: principles\ndescription: Принципы.\nmetadata:\n  always-on: safety",
+    "- [Безопасность](references/safety.md)\n- [Архитектура](references/architecture.md)",
+  );
+}
 
 function harnessFiles(): Record<string, string> {
   const stages = Object.fromEntries(
-    STAGES.map((stage) => [
-      `stages/${stage}.md`,
-      stageFile(`title: Этап ${stage}\ndescription: Делает ${stage}.`),
-    ]),
+    STAGES.map((stage) => [`skills/${stage}-stage/SKILL.md`, stageSkill(stage)]),
   );
 
   return {
     ...stages,
-    "principles/safety.md": "## Безопасность\n",
-    "principles/architecture.md": "## Архитектура\n",
+    "skills/feature/SKILL.md": skillText("name: feature\ndescription: Ведёт задачу.", "Ведущий."),
+    "skills/principles/SKILL.md": principlesSkill(),
+    "skills/principles/references/safety.md": "## Безопасность\n",
+    "skills/principles/references/architecture.md": "## Архитектура\n",
     "workflows/default.json": JSON.stringify({ name: "default", stages: [...STAGES] }),
-    "conductor.md": "Ведущий.\n",
   };
 }
 
 describe("parseHarness", () => {
-  it("собирает принципы по имени файла, этапы, процессы и правила ведущего", () => {
+  it("собирает ведущего, скиллы, принципы и процессы", () => {
     const files: HarnessFiles = harnessFiles();
 
     const harness = parseHarness(files);
 
     expect({
+      lead: harness.lead.body,
+      skills: harness.skills.map(({ name }) => name),
       principles: harness.principles,
-      stages: Object.keys(harness.stages),
       workflows: harness.workflows.map(({ name }) => name),
-      conductor: harness.conductor,
     }).toEqual({
-      principles: [
-        { name: "architecture", text: "## Архитектура" },
-        { name: "safety", text: "## Безопасность" },
+      lead: "Ведущий.",
+      skills: [
+        "implementation-stage",
+        "planning-stage",
+        "principles",
+        "record-stage",
+        "review-stage",
+        "verification-stage",
       ],
-      stages: [...STAGES],
+      principles: [
+        { name: "architecture", text: "## Архитектура", isAlwaysOn: false },
+        { name: "safety", text: "## Безопасность", isAlwaysOn: true },
+      ],
       workflows: ["default"],
-      conductor: "Ведущий.",
     });
   });
 
-  it("отклоняет harness без файла этапа", () => {
+  it("берёт этап, название, роль и доступ из metadata скилла этапа", () => {
+    const files = {
+      ...harnessFiles(),
+      "skills/review-stage/SKILL.md": stageSkill(
+        "review",
+        "  stage: review\n  title: Ревью\n  role: reviewer\n  access: read",
+      ),
+    };
+
+    const harness = parseHarness(files);
+
+    expect(harness.stages.review).toEqual({
+      stage: "review",
+      title: "Ревью",
+      description: "Делает review.",
+      role: { name: "reviewer", access: "read" },
+      body: "Текст скилла.",
+      skill: "review-stage",
+    });
+  });
+
+  it("читает этап без роли", () => {
     const files = harnessFiles();
 
-    delete files["stages/review.md"];
+    const harness = parseHarness(files);
+
+    expect(harness.stages.record.role).toBeUndefined();
+  });
+
+  it("отклоняет harness без скилла этапа", () => {
+    const files = harnessFiles();
+
+    delete files["skills/review-stage/SKILL.md"];
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/review has no skill/);
+  });
+
+  it("отклоняет два скилла одного этапа", () => {
+    const files = {
+      ...harnessFiles(),
+      "skills/review-again/SKILL.md": skillText(
+        "name: review-again\ndescription: Ещё ревью.\nmetadata:\n  stage: review\n  title: Ревью",
+      ),
+    };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/more than one skill/);
+  });
+
+  it("отклоняет неизвестный этап", () => {
+    const files = {
+      ...harnessFiles(),
+      "skills/deploy-stage/SKILL.md": stageSkill("deploy" as Stage),
+    };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/unknown stage deploy/);
+  });
+
+  it("отклоняет роль без доступа", () => {
+    const files = {
+      ...harnessFiles(),
+      "skills/implementation-stage/SKILL.md": stageSkill(
+        "implementation",
+        "  stage: implementation\n  title: Код\n  role: coder",
+      ),
+    };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/access/);
+  });
+
+  it("отклоняет имя роли не латиницей", () => {
+    const files = {
+      ...harnessFiles(),
+      "skills/implementation-stage/SKILL.md": stageSkill(
+        "implementation",
+        "  stage: implementation\n  title: Код\n  role: Кодер\n  access: write",
+      ),
+    };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/role/);
+  });
+
+  it("отклоняет скилл, имя которого не совпадает с каталогом", () => {
+    const files = {
+      ...harnessFiles(),
+      "skills/other/SKILL.md": skillText("name: another\ndescription: Другое."),
+    };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/directory name/);
+  });
+
+  it("отклоняет каталог скилла без SKILL.md", () => {
+    const files = { ...harnessFiles(), "skills/empty/references/note.md": "Заметка." };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/empty: no SKILL.md/);
+  });
+
+  it("отклоняет файл скилла не в Markdown", () => {
+    const files = { ...harnessFiles(), "skills/feature/scripts/run.sh": "echo" };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/scripts\/run.sh/);
+  });
+
+  it("отклоняет harness без скилла ведущего", () => {
+    const files = harnessFiles();
+
+    delete files["skills/feature/SKILL.md"];
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/no skill feature/);
+  });
+
+  it("отклоняет принцип, на который не ссылаются инструкции скилла", () => {
+    const files = { ...harnessFiles(), "skills/principles/references/scope.md": "## Объём\n" };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/references\/scope.md/);
+  });
+
+  it("отклоняет always-on с именем, которого нет среди принципов", () => {
+    const files = {
+      ...harnessFiles(),
+      "skills/principles/SKILL.md": principlesSkill().replace("always-on: safety", "always-on: x"),
+    };
+
+    const act = () => parseHarness(files);
+
+    expect(act).toThrow(/always-on names no principle x/);
+  });
+
+  it("отклоняет ошибку формата SKILL.md с именем каталога", () => {
+    const files = { ...harnessFiles(), "skills/broken/SKILL.md": "Без шапки." };
 
     const act = () => parseHarness(files);
 
     expect(act).toThrow(HarnessError);
+    expect(act).toThrow(/skill broken/);
   });
 
   it("отклоняет процесс, имя которого не совпадает с именем файла", () => {
@@ -136,13 +226,5 @@ describe("parseHarness", () => {
     const act = () => parseHarness(files);
 
     expect(act).toThrow(/short/);
-  });
-
-  it("не берёт файлы из вложенных каталогов", () => {
-    const files = { ...harnessFiles(), "principles/drafts/old.md": "## Старое" };
-
-    const harness = parseHarness(files);
-
-    expect(harness.principles.map(({ name }) => name)).toEqual(["architecture", "safety"]);
   });
 });

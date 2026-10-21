@@ -61,14 +61,14 @@ Cyberzavod is local-first. Nothing is shared unless you explicitly use sharing o
 For Claude Code:
 
 - `CLAUDE.md`: a thin entry point for Claude Code, generated: don't edit it by hand.
-- `.claude/agents/` and `.claude/skills/`: the stage agents, the recording editor, and the `/setup`, `/feature` and `/publish-recording` skills.
+- `.claude/agents/` and `.claude/skills/`: the stage agents, the recording editor, the `/setup`, `/feature` and `/publish-recording` skills, and the process itself as [Agent Skills](https://agentskills.io): a skill per stage and the `principles` skill, which the agent opens when the work calls for it.
 - `.claude/settings.json`: the recording and stop hooks and a rule that forbids reading and editing `.env`. Your own settings and hooks in this file stay as they are.
 
 For Codex CLI (`init --agent codex`; Codex reads `AGENTS.md` itself, so there is no `CLAUDE.md`):
 
 - `.codex/config.toml`: the workflow rules for the agent and a raised `AGENTS.md` size limit, so Codex does not silently cut your rules.
 - `.codex/agents/`: a role per stage and the recording editor.
-- `.agents/skills/`: the `$setup`, `$feature` and `$publish-recording` skills.
+- `.agents/skills/`: the `$setup`, `$feature` and `$publish-recording` skills, and the same stage and `principles` skills as for Claude Code.
 - `.codex/hooks.json`: the recording and stop hooks and a guard that refuses `.env` and raw session logs. Your own hooks in this file stay as they are.
 - In your own Codex config, outside the project: the trust for the project and its hooks (see Current support).
 
@@ -123,7 +123,7 @@ An unexpected error prints one line; run the command again with `CYBERZAVOD_DEBU
 
 AI coding agents are fast, but every project, model and tool ends up with its own prompts, rules files and habits. Change the model or the agent, and the process goes with it. Nothing records why the work went the way it did. Cyberzavod keeps three things stable while everything around them changes:
 
-- **The process.** `/feature <task>` runs the stages Plan → Code → Review → Verify → Record, with a role per stage, shared engineering principles and a human approving the plan.
+- **The process.** `/feature <task>` runs the stages Plan → Code → Review → Verify → Record, with a role per stage, shared engineering principles and a human approving the plan. The process is a set of [Agent Skills](https://agentskills.io), so every agent gets the same texts.
 - **The checks.** A per-project list of verification commands. The agent cannot finish a turn that changed code while they are red.
 - **The record.** A journal of sessions, decisions and notes in one plain JSON format that works for any agent.
 
@@ -154,7 +154,7 @@ The record format is the whole contract between the tool and any viewer. [cyberz
 
 | Path | What it is |
 |---|---|
-| `harness/` | The process: principles, stages, workflows, conductor rules. Agent- and stack-neutral |
+| `harness/` | The process as Agent Skills: the lead, a skill per stage, the principles; plus workflows. Agent- and stack-neutral |
 | `packages/core` | The model: records, project config, stages, harness |
 | `packages/player` | The factory-floor player: script and frame of a session record; used only by the site |
 | `packages/storage` | Disk: project config, the directory record store, harness loading |
