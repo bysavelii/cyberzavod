@@ -187,8 +187,10 @@ export {
   type RecordingTerms,
   type TemplateSource,
 } from "./generate/template.ts";
+export { harnessSkillFiles, type SkillPlacement } from "./generate/skill-files.ts";
 export {
   ownStageSections,
+  rolePrinciples,
   stageGuidesOf,
   stageTable,
   workingRulesParagraphs,

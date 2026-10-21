@@ -1,14 +1,16 @@
 // The project's Codex files, built from the harness and the project config: the working rules and
-// the document budget in `.codex/config.toml`, role agents, workflow skills. Codex reads AGENTS.md
+// the document budget in `.codex/config.toml`, role agents, the harness skills, workflow skills. Codex reads AGENTS.md
 // itself, so unlike Claude Code there are no files next to it. Only the texts live here; sync.ts
 // decides what to do with them on disk.
 
 import {
+  harnessSkillFiles,
   HASH_GENERATED_COMMENT,
   MARKDOWN_GENERATED_COMMENT,
   ownStageSections,
   recordingTemplateValues,
   renderTemplate,
+  rolePrinciples,
   stageGuidesOf,
   stageTable,
   templateValues,
@@ -17,7 +19,14 @@ import {
   type RecordingFragments,
   type RecordingTerms,
 } from "@cyberzavod/adapter-kit";
-import type { Harness, ProjectConfig, StageGuide, StageRole, Workflow } from "@cyberzavod/core";
+import {
+  skillFrontmatter,
+  type Harness,
+  type ProjectConfig,
+  type StageGuide,
+  type StageRole,
+  type Workflow,
+} from "@cyberzavod/core";
 import {
   codexEffortOf,
   codexModelOf,
@@ -79,7 +88,7 @@ function guidesOf(project: CodexProject): StageGuide[] {
 }
 
 // Codex replaces the parent's `developer_instructions` in a role with the role's own, so every role
-// carries the same working rules and then its own stage text.
+// carries the same working rules, the principles it works by and then its own stage text.
 function workingRules(project: CodexProject): string {
   const { config, harness, workflow } = project;
   const paragraphs = workingRulesParagraphs({
@@ -88,6 +97,7 @@ function workingRules(project: CodexProject): string {
     workflow,
     featureCall: FEATURE_CALL,
     agentsDirectory: AGENTS_DIRECTORY,
+    skillsDirectory: `${SKILLS_DIRECTORY}/`,
   });
 
   return paragraphs.join("\n\n");
@@ -105,7 +115,8 @@ function configFile(project: CodexProject): GeneratedFile {
 
 function roleFile(project: CodexProject, guide: StageGuide, role: StageRole): GeneratedFile {
   const model = codexModelOf(guide.stage, project.config.agents[guide.stage]);
-  const instructions = `${workingRules(project)}\n\n${guide.body}`;
+  const principles = rolePrinciples(project.harness);
+  const instructions = [workingRules(project), ...principles, guide.body].join("\n\n");
   const description = `${guide.description} The "${guide.title}" stage of $feature.`;
   const content = [
     HASH_GENERATED_COMMENT,
@@ -127,16 +138,25 @@ function roleFiles(project: CodexProject): GeneratedFile[] {
   });
 }
 
+// The harness skills keep the default policy: the model may open them on its own when the work
+// calls for it, unlike the skills the human calls.
+function harnessSkills(project: CodexProject): GeneratedFile[] {
+  return harnessSkillFiles(project.harness.skills, {
+    directory: SKILLS_DIRECTORY,
+    agentFields: {},
+  });
+}
+
 function featureFrontmatter(project: CodexProject, guides: readonly StageGuide[]): string {
   const route = guides.map(({ title }) => title.toLowerCase()).join(", ");
+  const frontmatter = skillFrontmatter({
+    name: project.harness.lead.name,
+    description: `Runs a task through the ${project.workflow.name} workflow — ${route}; each role has its own model. Usage: $feature <task>.`,
+    metadata: {},
+    agentFields: {},
+  });
 
-  return [
-    "---",
-    "name: feature",
-    `description: Runs a task through the ${project.workflow.name} workflow — ${route}; each role has its own model. Usage: $feature <task>.`,
-    "---",
-    MARKDOWN_GENERATED_COMMENT,
-  ].join("\n");
+  return `${frontmatter}\n${MARKDOWN_GENERATED_COMMENT}`;
 }
 
 function stageCallText(project: CodexProject): string {
@@ -162,7 +182,10 @@ function featureSkill(project: CodexProject): GeneratedFile {
     ...ownStageSections(guides),
   ].join("\n\n");
 
-  return { path: `${SKILLS_DIRECTORY}/feature/SKILL.md`, content: `${content}\n` };
+  return {
+    path: `${SKILLS_DIRECTORY}/${project.harness.lead.name}/SKILL.md`,
+    content: `${content}\n`,
+  };
 }
 
 function setupSkill(project: CodexProject): GeneratedFile {
@@ -222,6 +245,7 @@ export function codexFiles(project: CodexProject): GeneratedFile[] {
   return [
     configFile(project),
     ...roleFiles(project),
+    ...harnessSkills(project),
     featureSkill(project),
     skillPolicy("feature"),
     setupSkill(project),

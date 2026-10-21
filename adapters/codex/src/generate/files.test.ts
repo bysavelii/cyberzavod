@@ -21,8 +21,22 @@ function guide(stage: StageGuide["stage"], title: string, role?: string): StageG
 function harness(): Harness {
   return {
     lead: { name: "feature", description: "Lead.", metadata: {}, body: "Lead rules.", files: [] },
-    skills: [],
-    principles: [{ name: "safety", text: "## Safety\n\nNo secrets.", isAlwaysOn: true }],
+    skills: [
+      {
+        name: "principles",
+        description: "The principles.",
+        metadata: { "always-on": "safety" },
+        body: "- [Scope](references/scope.md)\n- [Safety](references/safety.md)",
+        files: [
+          { path: "references/safety.md", text: "## Safety\n\nNo secrets." },
+          { path: "references/scope.md", text: "## Scope\n\nOnly the task." },
+        ],
+      },
+    ],
+    principles: [
+      { name: "safety", text: "## Safety\n\nNo secrets.", isAlwaysOn: true },
+      { name: "scope", text: "## Scope\n\nOnly the task.", isAlwaysOn: false },
+    ],
     stages: {
       planning: guide("planning", "Plan", "analyst"),
       implementation: guide("implementation", "Code", "coder"),
@@ -111,6 +125,9 @@ describe("codexFiles", () => {
       ".codex/config.toml",
       ".codex/agents/analyst.toml",
       ".codex/agents/coder.toml",
+      ".agents/skills/principles/SKILL.md",
+      ".agents/skills/principles/references/safety.md",
+      ".agents/skills/principles/references/scope.md",
       ".agents/skills/feature/SKILL.md",
       ".agents/skills/feature/agents/openai.yaml",
       ".agents/skills/setup/SKILL.md",
@@ -158,6 +175,27 @@ describe("codexFiles", () => {
     });
     expect(role.developer_instructions).toEqual(expect.stringContaining(rules));
     expect(role.developer_instructions).toEqual(expect.stringContaining("Stage text Code."));
+  });
+
+  it("роль несёт принципы, которых нет в правилах работы, а config.toml называет их скилл", () => {
+    const project = codexProject();
+    const rules = parse(fileOf(project, CONFIG_FILE)).developer_instructions as string;
+
+    const role = parse(fileOf(project, ".codex/agents/coder.toml"));
+
+    expect(rules).not.toContain("## Scope");
+    expect(rules).toContain("`.agents/skills/principles/SKILL.md`");
+    expect(role.developer_instructions).toEqual(expect.stringContaining("## Scope"));
+  });
+
+  it("кладёт скиллы harness как есть, без полей агента и политики вызова", () => {
+    const project = codexProject();
+    const paths = codexFiles(project).map(({ path }) => path);
+
+    const content = fileOf(project, ".agents/skills/principles/SKILL.md");
+
+    expect(content).toContain("name: principles\ndescription: The principles.\nmetadata:");
+    expect(paths).not.toContain(".agents/skills/principles/agents/openai.yaml");
   });
 
   it("берёт модель этапа из конфига", () => {

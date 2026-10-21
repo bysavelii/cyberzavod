@@ -19,8 +19,22 @@ function guide(stage: StageGuide["stage"], title: string, role?: string): StageG
 function harness(): Harness {
   return {
     lead: { name: "feature", description: "Lead.", metadata: {}, body: "Lead rules.", files: [] },
-    skills: [],
-    principles: [{ name: "safety", text: "## Safety\n\nNo secrets.", isAlwaysOn: true }],
+    skills: [
+      {
+        name: "principles",
+        description: "The principles.",
+        metadata: { "always-on": "safety" },
+        body: "- [Scope](references/scope.md)\n- [Safety](references/safety.md)",
+        files: [
+          { path: "references/safety.md", text: "## Safety\n\nNo secrets." },
+          { path: "references/scope.md", text: "## Scope\n\nOnly the task." },
+        ],
+      },
+    ],
+    principles: [
+      { name: "safety", text: "## Safety\n\nNo secrets.", isAlwaysOn: true },
+      { name: "scope", text: "## Scope\n\nOnly the task.", isAlwaysOn: false },
+    ],
     stages: {
       planning: guide("planning", "Plan", "analyst"),
       implementation: guide("implementation", "Code", "coder"),
@@ -75,6 +89,9 @@ describe("claudeFiles", () => {
       "apps/web/CLAUDE.md",
       ".claude/agents/analyst.md",
       ".claude/agents/coder.md",
+      ".claude/skills/principles/SKILL.md",
+      ".claude/skills/principles/references/safety.md",
+      ".claude/skills/principles/references/scope.md",
       ".claude/skills/feature/SKILL.md",
       ".claude/skills/setup/SKILL.md",
       ".claude/skills/publish-recording/SKILL.md",
@@ -94,6 +111,36 @@ describe("claudeFiles", () => {
       content.includes("## Safety"),
       content.trimEnd().endsWith("@AGENTS.md"),
     ]).toEqual([true, true, true, true, true]);
+  });
+
+  it("корневой CLAUDE.md оставляет прочие принципы в скилле и называет его", () => {
+    const project = claudeProject();
+
+    const content = fileOf(project, "CLAUDE.md");
+
+    expect(content).not.toContain("## Scope");
+    expect(content).toContain("`.claude/skills/principles/SKILL.md`");
+  });
+
+  it("агент роли несёт текст этапа и принципы, которых нет в CLAUDE.md", () => {
+    const project = claudeProject();
+
+    const content = fileOf(project, ".claude/agents/coder.md");
+
+    expect(content).toContain("Stage text Code.\n\n## Scope\n\nOnly the task.");
+    expect(content).not.toContain("## Safety");
+  });
+
+  it("кладёт скиллы harness как есть и прячет их из меню команд", () => {
+    const project = claudeProject();
+
+    const content = fileOf(project, ".claude/skills/principles/SKILL.md");
+
+    expect(content).toContain(
+      "name: principles\ndescription: The principles.\nuser-invocable: false",
+    );
+    expect(content).toContain("metadata:\n  always-on: safety\n---\n<!-- ");
+    expect(content.trimEnd().endsWith("- [Safety](references/safety.md)")).toBe(true);
   });
 
   it("вложенный CLAUDE.md только импортирует AGENTS.md", () => {

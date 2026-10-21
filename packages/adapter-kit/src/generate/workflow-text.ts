@@ -1,8 +1,15 @@
 // Texts built from the harness and the config that every agent's files carry: the working rules of
-// the process, the table of stages and the stages the lead runs itself. The agents differ in how
-// they call a skill and where the role files lie.
+// the process, the principles of the roles, the table of stages and the stages the lead runs
+// itself. The agents differ in how they call a skill and where the role and skill files lie.
 
-import type { Harness, ProjectConfig, StageGuide, Workflow } from "@cyberzavod/core";
+import {
+  PRINCIPLES_SKILL,
+  SKILL_FILE,
+  type Harness,
+  type ProjectConfig,
+  type StageGuide,
+  type Workflow,
+} from "@cyberzavod/core";
 
 /** What the working rules are built from. */
 export interface WorkingRulesSource {
@@ -13,6 +20,8 @@ export interface WorkingRulesSource {
   featureCall: string;
   /** Directory of the role files from the project root with `/`, with a trailing `/`. */
   agentsDirectory: string;
+  /** Directory of the skills from the project root with `/`, with a trailing `/`. */
+  skillsDirectory: string;
 }
 
 /**
@@ -35,24 +44,51 @@ function verificationText(config: ProjectConfig): string {
   return `Project checks (\`verification.commands\` in \`.cyberzavod/project.json\`) must pass before a commit:\n\n${commands.join("\n")}`;
 }
 
+// The principles that are not always on stay in their skill: the rules only say where they are, so
+// the agent opens them when it writes or reviews code instead of reading them on every request.
+function principlesPointer(harness: Harness, skillsDirectory: string): string[] {
+  const onDemand = harness.principles.filter(({ isAlwaysOn }) => !isAlwaysOn);
+
+  if (onDemand.length === 0) return [];
+
+  const names = onDemand.map(({ name }) => name.replaceAll("-", " ")).join(", ");
+  const skillPath = `${skillsDirectory}${PRINCIPLES_SKILL}/${SKILL_FILE}`;
+
+  return [
+    `The other principles — ${names} — are in the \`${PRINCIPLES_SKILL}\` skill (\`${skillPath}\`): read them before writing, changing or reviewing code.`,
+  ];
+}
+
 /**
  * The working rules of the process as paragraphs: the heading, the route of the workflow, the
- * project checks and the principles of the harness.
+ * project checks, the principles that are always on and where the other principles are.
  * @param {WorkingRulesSource} source Config, harness, workflow and how the agent calls things.
  * @returns {string[]} Paragraphs without blank lines between them.
  */
 export function workingRulesParagraphs(source: WorkingRulesSource): string[] {
-  const { config, harness, workflow, featureCall, agentsDirectory } = source;
+  const { config, harness, workflow, featureCall, agentsDirectory, skillsDirectory } = source;
   const route = stageGuidesOf(harness, workflow)
     .map(({ title }) => title)
     .join(" → ");
+  const alwaysOn = harness.principles.filter(({ isAlwaysOn }) => isAlwaysOn);
 
   return [
     "# How to work in this project",
     `The development process is run by Cyberzavod (harness ${config.harness}, workflow \`${config.workflow}\`): ${route}. \`${featureCall}\` takes a task through the whole workflow; stage roles are agents in \`${agentsDirectory}\`.`,
     verificationText(config),
-    ...harness.principles.map(({ text }) => text),
+    ...alwaysOn.map(({ text }) => text),
+    ...principlesPointer(harness, skillsDirectory),
   ];
+}
+
+/**
+ * The principles a stage role works by that are not always on: a role starts from its assignment
+ * and gets them with its instructions rather than opening the skill.
+ * @param {Harness} harness Harness.
+ * @returns {string[]} The texts of the principles, one paragraph each.
+ */
+export function rolePrinciples(harness: Harness): string[] {
+  return harness.principles.filter(({ isAlwaysOn }) => !isAlwaysOn).map(({ text }) => text);
 }
 
 /**

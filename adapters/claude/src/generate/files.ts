@@ -1,12 +1,14 @@
 // The project's Claude Code files, built from the harness and the project config: thin CLAUDE.md
-// files on top of AGENTS.md, role agents, workflow skills, project settings and recording
-// publishing. Only the texts live here; sync.ts decides what to do with them on disk.
+// files on top of AGENTS.md, role agents, the harness skills, workflow skills, project settings and
+// recording publishing. Only the texts live here; sync.ts decides what to do with them on disk.
 
 import {
+  harnessSkillFiles,
   MARKDOWN_GENERATED_COMMENT,
   ownStageSections,
   recordingTemplateValues,
   renderTemplate as renderKitTemplate,
+  rolePrinciples,
   stageGuidesOf,
   stageTable,
   templateValues,
@@ -16,7 +18,14 @@ import {
   type RecordingFragments,
   type RecordingTerms,
 } from "@cyberzavod/adapter-kit";
-import type { Harness, ProjectConfig, StageGuide, StageRole, Workflow } from "@cyberzavod/core";
+import {
+  skillFrontmatter,
+  type Harness,
+  type ProjectConfig,
+  type StageGuide,
+  type StageRole,
+  type Workflow,
+} from "@cyberzavod/core";
 import {
   claudeEffortOf,
   claudeModelOf,
@@ -59,6 +68,11 @@ const RECORDING_TERMS: RecordingTerms = {
 
 const RULES_FILE = "AGENTS.md";
 const ENTRYPOINT_FILE = "CLAUDE.md";
+const SKILLS_DIRECTORY = ".claude/skills";
+
+// The human starts the work with /feature: the harness skills stay out of the slash menu, and the
+// model still opens them when the work calls for it.
+const HARNESS_SKILL_FIELDS = { "user-invocable": "false" };
 
 function joinPath(directory: string, file: string): string {
   return directory === "" ? file : `${directory}/${file}`;
@@ -76,6 +90,7 @@ function rootEntrypoint(project: ClaudeProject): string {
     workflow,
     featureCall: "/feature <task>",
     agentsDirectory: ".claude/agents/",
+    skillsDirectory: `${SKILLS_DIRECTORY}/`,
   });
 
   return [MARKDOWN_GENERATED_COMMENT, ...rules, `@${RULES_FILE}`].join("\n\n");
@@ -92,7 +107,17 @@ function entrypoints(project: ClaudeProject): GeneratedFile[] {
   }));
 }
 
-function agentFile(guide: StageGuide, role: StageRole, model: string): GeneratedFile {
+interface RoleAgent {
+  guide: StageGuide;
+  role: StageRole;
+  model: string;
+  /** The principles the role works by beyond the always-on rules of CLAUDE.md. */
+  principles: readonly string[];
+}
+
+function agentFile(agent: RoleAgent): GeneratedFile {
+  const { guide, role, model, principles } = agent;
+  const instructions = [guide.body, ...principles].join("\n\n");
   const content = [
     "---",
     `name: ${role.name}`,
@@ -103,7 +128,7 @@ function agentFile(guide: StageGuide, role: StageRole, model: string): Generated
     "---",
     MARKDOWN_GENERATED_COMMENT,
     "",
-    guide.body,
+    instructions,
     "",
   ].join("\n");
 
@@ -111,27 +136,34 @@ function agentFile(guide: StageGuide, role: StageRole, model: string): Generated
 }
 
 function roleAgents(project: ClaudeProject): GeneratedFile[] {
+  const principles = rolePrinciples(project.harness);
+
   return guidesOf(project).flatMap((guide) => {
     if (guide.role === undefined) return [];
 
     const model = claudeModelOf(guide.stage, project.config.agents[guide.stage]);
 
-    return [agentFile(guide, guide.role, model)];
+    return [agentFile({ guide, role: guide.role, model, principles })];
+  });
+}
+
+function harnessSkills(project: ClaudeProject): GeneratedFile[] {
+  return harnessSkillFiles(project.harness.skills, {
+    directory: SKILLS_DIRECTORY,
+    agentFields: HARNESS_SKILL_FIELDS,
   });
 }
 
 function featureFrontmatter(project: ClaudeProject, guides: readonly StageGuide[]): string {
   const route = guides.map(({ title }) => title.toLowerCase()).join(", ");
+  const frontmatter = skillFrontmatter({
+    name: project.harness.lead.name,
+    description: `Runs a task through the ${project.workflow.name} workflow — ${route}; each role has its own model. Usage: /feature <task>.`,
+    metadata: {},
+    agentFields: { "argument-hint": "<task>", "disable-model-invocation": "true" },
+  });
 
-  return [
-    "---",
-    "name: feature",
-    `description: Runs a task through the ${project.workflow.name} workflow — ${route}; each role has its own model. Usage: /feature <task>.`,
-    "argument-hint: <task>",
-    "disable-model-invocation: true",
-    "---",
-    MARKDOWN_GENERATED_COMMENT,
-  ].join("\n");
+  return `${frontmatter}\n${MARKDOWN_GENERATED_COMMENT}`;
 }
 
 function featureSkill(project: ClaudeProject): GeneratedFile {
@@ -147,7 +179,10 @@ function featureSkill(project: ClaudeProject): GeneratedFile {
     ...ownStageSections(guides),
   ].join("\n\n");
 
-  return { path: ".claude/skills/feature/SKILL.md", content: `${content}\n` };
+  return {
+    path: `${SKILLS_DIRECTORY}/${project.harness.lead.name}/SKILL.md`,
+    content: `${content}\n`,
+  };
 }
 
 /**
@@ -200,6 +235,7 @@ export function claudeFiles(project: ClaudeProject): GeneratedFile[] {
   return [
     ...entrypoints(project),
     ...roleAgents(project),
+    ...harnessSkills(project),
     featureSkill(project),
     setupSkill(project),
     ...recordingFiles(project),
