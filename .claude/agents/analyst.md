@@ -1,6 +1,6 @@
 ---
 name: analyst
-description: Sets the task — studies the code and writes a plan with acceptance criteria. The "Plan" stage of /feature.
+description: Sets the task — studies the code and writes a plan with acceptance criteria. Use before changing code for a task that has no approved plan yet. The "Plan" stage of /feature.
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high

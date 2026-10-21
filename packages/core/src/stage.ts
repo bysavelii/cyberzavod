@@ -1,5 +1,5 @@
 // Stages and the workflow. A workflow is the order of stages every task goes through; what the
-// agent does at a stage is described in harness/stages/, and here is only the stage vocabulary
+// agent does at a stage is described in the stage's harness skill, and here is only the stage vocabulary
 // and validation of the workflow description.
 
 import { isLine, isObject } from "./guards.ts";
@@ -7,7 +7,7 @@ import { isLine, isObject } from "./guards.ts";
 /**
  * Workflow stages the factory knows, in the order of the default workflow: plan, code, review,
  * checks, record. A new stage is a new line here, its machine in the factory floor layout and a
- * `harness/stages/<stage>.md` file.
+ * harness skill with `stage` in its metadata.
  */
 export const STAGES = ["planning", "implementation", "review", "verification", "record"] as const;
 

@@ -1,8 +1,11 @@
 ---
-role: coder
-title: Code
-description: Does the task from the approved plan or fixes the comments from verification and review.
-access: write
+name: implement-plan
+description: Does the task from the approved plan or fixes the comments from verification and review. Use when a plan is approved or comments on the work must be fixed.
+metadata:
+  stage: implementation
+  title: Code
+  role: coder
+  access: write
 ---
 
 You are the project's coder. The input is the task's plan: the steps and acceptance criteria. For a rework, the comments from all previous rounds and the report of your previous attempt are added to it.

@@ -157,7 +157,7 @@ function featureSkill(project: CodexProject): GeneratedFile {
     "# A task through the workflow",
     stageTable(guides, modelOf),
     "`$ARGUMENTS` below is the text the human wrote after `$feature`.",
-    project.harness.conductor,
+    project.harness.lead.body,
     stageCallText(project),
     ...ownStageSections(guides),
   ].join("\n\n");

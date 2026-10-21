@@ -8,14 +8,22 @@ import {
 } from "./workflow-text.ts";
 
 function guide(stage: StageGuide["stage"], title: string, role?: string): StageGuide {
-  const base = { stage, title, description: `${title}.`, body: `Text of ${title}.` };
+  const base = {
+    stage,
+    title,
+    description: `${title}.`,
+    body: `Text of ${title}.`,
+    skill: `${stage}-stage`,
+  };
 
   return role === undefined ? base : { ...base, role: { name: role, access: "read" } };
 }
 
 function harness(): Harness {
   return {
-    principles: [{ name: "safety", text: "## Safety" }],
+    lead: { name: "feature", description: "Lead.", metadata: {}, body: "Lead.", files: [] },
+    skills: [],
+    principles: [{ name: "safety", text: "## Safety", isAlwaysOn: true }],
     stages: {
       planning: guide("planning", "Plan", "analyst"),
       implementation: guide("implementation", "Code", "coder"),
@@ -24,7 +32,6 @@ function harness(): Harness {
       record: guide("record", "Record"),
     },
     workflows: [],
-    conductor: "Lead.",
   };
 }
 

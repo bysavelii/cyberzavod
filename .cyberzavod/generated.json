@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "files": {
-    ".claude/agents/analyst.md": "sha256:9938cba27761df3ad56f28def581d74b148a3591b1663e1cf9e795b5c05f8d6e",
-    ".claude/agents/coder.md": "sha256:8b749784d8237c5b919a659aedbbfdfe7833dfab6b9811e0e34dd526b02b545f",
+    ".claude/agents/analyst.md": "sha256:8c61540a4cd0a4ce4d3c8e82e36bf8934f48c88144c394c3f23f1ea9b46a3e55",
+    ".claude/agents/coder.md": "sha256:a668701686a9f6073b68c1643a9f7e04c6b26525f4eb634d51bb3943b83acc49",
     ".claude/agents/recording-editor.md": "sha256:6748da27becb1781074f7f8c170ed0e97e20eec9f788a156d6c4afc5736b3a54",
-    ".claude/agents/reviewer.md": "sha256:e2b2674bd92ee5a66150b1ce534851513c77159e220b331a7ca920cfe594efe8",
-    ".claude/agents/tester.md": "sha256:eaeabd30b516447e0c4d7aeb89eb01b359ca7ca9e8e7061cf72dfcea82705fc3",
+    ".claude/agents/reviewer.md": "sha256:1683104d2d4bc941b4100e3c56d7d80b79b3e309999ef6d357df9c35c02cc861",
+    ".claude/agents/tester.md": "sha256:09c3760864c5f6b37e9660eaf8e196fc7011decd91c354c420e457045b1ba5b9",
     ".claude/skills/feature/SKILL.md": "sha256:41eced3037f5485c581cb6fa639c2910bbc5b13b395c756b4c5f914df63d7726",
     ".claude/skills/publish-recording/SKILL.md": "sha256:c4fd852b9980433a8d9a047f80d980cecf27bfadcbb491b36feb736e3f949aca",
     ".claude/skills/setup/SKILL.md": "sha256:49a32b1565c9c114b9c44f237fb80c5b4094ca5c2390d2480ec533030169c95c",

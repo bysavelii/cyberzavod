@@ -7,10 +7,11 @@ const REPOSITORY_HARNESS = path.resolve(import.meta.dirname, "../../../harness")
 
 function harnessWith(names: string[]): Harness {
   return {
+    lead: { name: "feature", description: "Lead.", metadata: {}, body: "", files: [] },
+    skills: [],
     principles: [],
     stages: {} as Harness["stages"],
     workflows: names.map((name) => ({ name, stages: ["implementation"] })),
-    conductor: "",
   };
 }
 
@@ -23,7 +24,7 @@ describe("loadHarness", () => {
     expect(workflow.stages).toEqual([...STAGES]);
   });
 
-  it("читает принципы по имени файла и этап для каждого из STAGES", async () => {
+  it("читает принципы из скилла principles и этап для каждого из STAGES", async () => {
     const harness = await loadHarness(REPOSITORY_HARNESS);
     const principles = harness.principles.map(({ name }) => name);
     const stages = Object.keys(harness.stages);

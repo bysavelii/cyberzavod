@@ -5,14 +5,22 @@ import { claudeFiles, renderTemplate, type ClaudeProject } from "./files.ts";
 import { realTemplates } from "./templates.fixtures.ts";
 
 function guide(stage: StageGuide["stage"], title: string, role?: string): StageGuide {
-  const base = { stage, title, description: `${title}.`, body: `Stage text ${title}.` };
+  const base = {
+    stage,
+    title,
+    description: `${title}.`,
+    body: `Stage text ${title}.`,
+    skill: `${stage}-stage`,
+  };
 
   return role === undefined ? base : { ...base, role: { name: role, access: "read" } };
 }
 
 function harness(): Harness {
   return {
-    principles: [{ name: "safety", text: "## Safety\n\nNo secrets." }],
+    lead: { name: "feature", description: "Lead.", metadata: {}, body: "Lead rules.", files: [] },
+    skills: [],
+    principles: [{ name: "safety", text: "## Safety\n\nNo secrets.", isAlwaysOn: true }],
     stages: {
       planning: guide("planning", "Plan", "analyst"),
       implementation: guide("implementation", "Code", "coder"),
@@ -21,7 +29,6 @@ function harness(): Harness {
       record: guide("record", "Record"),
     },
     workflows: [],
-    conductor: "Lead rules.",
   };
 }
 

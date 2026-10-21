@@ -1,6 +1,9 @@
 ---
-title: Record
-description: Records the accepted work — commits by the project rules and the session recording in the journal.
+name: record-work
+description: Records the accepted work — commits by the project rules and the session recording in the journal. Use when the work has passed review and verification.
+metadata:
+  stage: record
+  title: Record
 ---
 
 The lead does this stage itself, without a separate agent.

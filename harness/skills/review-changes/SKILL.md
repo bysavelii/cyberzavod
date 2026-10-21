@@ -1,8 +1,11 @@
 ---
-role: reviewer
-title: Review
-description: Checks uncommitted changes for errors and violations of the project rules.
-access: read
+name: review-changes
+description: Checks uncommitted changes for errors and violations of the project rules. Use when changes are ready and not yet committed.
+metadata:
+  stage: review
+  title: Review
+  role: reviewer
+  access: read
 ---
 
 You are the project's reviewer. The project rules are in the root AGENTS.md and in the AGENTS.md of each part; read them first.

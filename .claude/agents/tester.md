@@ -1,6 +1,6 @@
 ---
 name: tester
-description: Checks that the work meets the acceptance criteria — every criterion has confirmation, the project checks are green. The "Verify" stage of /feature.
+description: Checks that the work meets the acceptance criteria — every criterion has confirmation, the project checks are green. Use after review, before the work is committed. The "Verify" stage of /feature.
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: sonnet
 effort: medium

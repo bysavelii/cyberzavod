@@ -142,7 +142,7 @@ function featureSkill(project: ClaudeProject): GeneratedFile {
     featureFrontmatter(project, guides),
     "# A task through the workflow",
     stageTable(guides, modelOf),
-    project.harness.conductor,
+    project.harness.lead.body,
     `Stronger model for the second rework — \`${ESCALATION_MODEL}\`: pass \`model: "${ESCALATION_MODEL}"\` in the agent call.`,
     ...ownStageSections(guides),
   ].join("\n\n");

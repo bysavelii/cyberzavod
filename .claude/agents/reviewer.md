@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Checks uncommitted changes for errors and violations of the project rules. The "Review" stage of /feature.
+description: Checks uncommitted changes for errors and violations of the project rules. Use when changes are ready and not yet committed. The "Review" stage of /feature.
 tools: Read, Grep, Glob, Bash
 model: opus
 effort: high

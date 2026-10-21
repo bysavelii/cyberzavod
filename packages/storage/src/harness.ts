@@ -1,5 +1,5 @@
-// Harness on disk: a directory with `principles/*.md`, `stages/<stage>.md`, `workflows/*.json` and
-// `conductor.md`. Here is only reading the files; parsing the texts is in the core.
+// Harness on disk: a directory with skills in `skills/<name>/` and workflows in `workflows/*.json`.
+// Here is only reading the files; parsing the texts is in the core.
 
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -35,8 +35,8 @@ export async function readHarnessFiles(directory: string): Promise<HarnessFiles>
 /**
  * Reads the harness from a directory.
  * @param {string} directory Harness directory.
- * @returns {Promise<Harness>} Principles by file name, all stages, workflows and the lead's rules.
- * @throws {HarnessError} If a stage or workflow file failed validation.
+ * @returns {Promise<Harness>} The lead, skills, principles, all stages and workflows.
+ * @throws {HarnessError} If a skill or workflow file failed validation.
  */
 export async function loadHarness(directory: string): Promise<Harness> {
   const files = await readHarnessFiles(directory);

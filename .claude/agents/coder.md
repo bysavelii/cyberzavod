@@ -1,6 +1,6 @@
 ---
 name: coder
-description: Does the task from the approved plan or fixes the comments from verification and review. The "Code" stage of /feature.
+description: Does the task from the approved plan or fixes the comments from verification and review. Use when a plan is approved or comments on the work must be fixed. The "Code" stage of /feature.
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: sonnet
 effort: high
