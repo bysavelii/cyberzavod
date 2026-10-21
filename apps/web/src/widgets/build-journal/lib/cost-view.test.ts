@@ -99,7 +99,7 @@ describe("costViewOf", () => {
 
     const view = costViewOf(recording, "ru");
 
-    expect(view?.note).toBe("По ценам API на 11 октября 2026 г.; подписка оплачивается иначе.");
+    expect(view?.note).toBe("По ценам API на 21 октября 2026 г.; подписка оплачивается иначе.");
   });
 
   it("не показывает блок у записи без разбивки токенов", () => {

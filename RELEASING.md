@@ -5,7 +5,7 @@
 ## Шаги
 
 1. Сверить `MODEL_PRICES` (`packages/core/src/model-prices.ts`) с официальными страницами цен и обновить `PRICES_AS_OF`; цена существующего id изменилась — добавить строки с датой начала, а не править (правило — в `packages/core/AGENTS.md`).
-2. Поднять версию в `packages/cli/package.json`, `packages/viewer/package.json` и `HARNESS_VERSION` — минорную, если менялись harness, шаблоны адаптера или поведение команд, иначе патч.
+2. Поднять версию в `packages/cli/package.json`, `packages/viewer/package.json` и `HARNESS_VERSION` — мажорную, если ломается формат harness или то, что получают подключённые проекты (раскладка сгенерированных файлов, их смысл), минорную, если менялись harness, шаблоны адаптера или поведение команд, иначе патч.
 3. `pnpm cyberzavod sync` — перегенерировать `CLAUDE.md`, `.claude/` и хуки этого репозитория под новую версию.
 4. `make check-web check-api` и `pnpm smoke` — проверки и путь человека на настоящих архивах `npm pack`: CLI не больше своего предела размера, цех без зависимостей, `view` из архива цеха, в том числе без сети.
 5. Коммит `chore(cli): версия X.Y.Z`, push в `main`, дождаться зелёного CI: в нём job `package` гоняет ту же дымовую проверку на Linux, macOS и Windows с Node 22 и 24.

@@ -10,7 +10,7 @@ export type ModelPrice = Readonly<TokenBreakdown>;
 export const TOKENS_PER_PRICE_UNIT = 1_000_000;
 
 /** The day the prices below were checked against the official page, `YYYY-MM-DD`. */
-export const PRICES_AS_OF = "2026-10-11";
+export const PRICES_AS_OF = "2026-10-21";
 
 // A snapshot id is the model id with a `-YYYYMMDD` suffix: `claude-sonnet-4-5-20250929`.
 const SNAPSHOT_SUFFIX = /-\d{8}$/;
