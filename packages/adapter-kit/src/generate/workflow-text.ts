@@ -6,6 +6,7 @@ import {
   PRINCIPLES_SKILL,
   SKILL_FILE,
   type Harness,
+  type Principle,
   type ProjectConfig,
   type StageGuide,
   type Workflow,
@@ -46,8 +47,12 @@ function verificationText(config: ProjectConfig): string {
 
 // The principles that are not always on stay in their skill: the rules only say where they are, so
 // the agent opens them when it writes or reviews code instead of reading them on every request.
+function onDemandPrinciples(harness: Harness): Principle[] {
+  return harness.principles.filter(({ isAlwaysOn }) => !isAlwaysOn);
+}
+
 function principlesPointer(harness: Harness, skillsDirectory: string): string[] {
-  const onDemand = harness.principles.filter(({ isAlwaysOn }) => !isAlwaysOn);
+  const onDemand = onDemandPrinciples(harness);
 
   if (onDemand.length === 0) return [];
 
@@ -88,7 +93,7 @@ export function workingRulesParagraphs(source: WorkingRulesSource): string[] {
  * @returns {string[]} The texts of the principles, one paragraph each.
  */
 export function rolePrinciples(harness: Harness): string[] {
-  return harness.principles.filter(({ isAlwaysOn }) => !isAlwaysOn).map(({ text }) => text);
+  return onDemandPrinciples(harness).map(({ text }) => text);
 }
 
 /**

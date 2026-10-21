@@ -17,6 +17,8 @@ const FRONTMATTER = /^---\n([\s\S]*?)\n---(?:\n|$)/;
 const TOP_LEVEL_FIELD = /^([^\s:][^:]*):(?:\s+(.*))?$/;
 const METADATA_FIELD = /^ {2}([^\s:][^:]*):(?:\s+(.*))?$/;
 const METADATA = "metadata";
+// eslint-disable-next-line no-control-regex -- control characters are exactly what is looked for
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 
 /** A skill's main file: who it is, when to use it, extra string fields, and the instructions. */
 export interface SkillDocument {
@@ -65,16 +67,36 @@ function keyOf(raw: string | undefined, line: string): string {
   return key;
 }
 
+// A value that is not one line would not survive being written back: the writer puts every field
+// on its own line.
+function lineValueOf(raw: string | undefined, line: string): string {
+  const value = scalarOf(raw);
+
+  if (CONTROL_CHARACTER.test(value)) {
+    throw new SkillError(`front matter line «${line}» has a value with a line break`);
+  }
+
+  return value;
+}
+
+function requireNewKey(keys: ReadonlySet<string>, key: string): void {
+  if (keys.has(key)) throw new SkillError(`front matter key ${key} repeats`);
+}
+
 function frontmatterFields(lines: readonly string[]): Frontmatter {
   const fields = new Map<string, string>();
   const metadata: Record<string, string> = {};
+  const topLevelKeys = new Set<string>();
   let isInMetadata = false;
 
   for (const line of lines) {
     const metadataField = METADATA_FIELD.exec(line);
 
     if (isInMetadata && metadataField !== null) {
-      metadata[keyOf(metadataField[1], line)] = scalarOf(metadataField[2]);
+      const key = keyOf(metadataField[1], line);
+
+      requireNewKey(new Set(Object.keys(metadata)), key);
+      metadata[key] = lineValueOf(metadataField[2], line);
       continue;
     }
 
@@ -83,9 +105,16 @@ function frontmatterFields(lines: readonly string[]): Frontmatter {
     if (field === null) throw new SkillError(`front matter line «${line}» is not a field`);
 
     const key = keyOf(field[1], line);
+    const value = lineValueOf(field[2], line);
 
+    requireNewKey(topLevelKeys, key);
+    topLevelKeys.add(key);
     isInMetadata = key === METADATA;
-    if (!isInMetadata) fields.set(key, scalarOf(field[2]));
+
+    if (isInMetadata && value !== "") {
+      throw new SkillError(`front matter ${METADATA} must be a map of fields on the next lines`);
+    }
+    if (!isInMetadata) fields.set(key, value);
   }
 
   return { fields, metadata };
@@ -106,7 +135,9 @@ function requiredName(fields: ReadonlyMap<string, string>): string {
 function requiredDescription(fields: ReadonlyMap<string, string>, name: string): string {
   const description = fields.get("description");
 
-  if (!isLine(description) || description.length > DESCRIPTION_MAX_LENGTH) {
+  const isTooLong = [...(description ?? "")].length > DESCRIPTION_MAX_LENGTH;
+
+  if (!isLine(description) || isTooLong) {
     throw new SkillError(
       `skill ${name}: description must be one line of 1–${DESCRIPTION_MAX_LENGTH} characters`,
     );
@@ -149,13 +180,21 @@ export function parseSkillDocument(text: string): SkillDocument {
 }
 
 const PLAIN_START = /^[^\s\-?:,[\]{}#&*!|>'"%@`]/;
-const RESERVED_SCALAR = /^(?:true|false|yes|no|on|off|null|~|[-+.]?\d.*)$/i;
+const RESERVED_SCALAR = /^(?:true|false|yes|no|on|off|null|~|[-+.]?\d.*|[-+]?\.(?:inf|nan))$/i;
+const INDICATOR = /:\s|\s#|:$/;
 
 function isPlainSafe(value: string): boolean {
   const isTrimmed = value === value.trim();
-  const hasIndicator = value.includes(": ") || value.includes(" #") || value.endsWith(":");
+  const isOneLine = !CONTROL_CHARACTER.test(value);
+  const hasIndicator = INDICATOR.test(value);
 
-  return isTrimmed && PLAIN_START.test(value) && !hasIndicator && !RESERVED_SCALAR.test(value);
+  return (
+    isTrimmed &&
+    isOneLine &&
+    PLAIN_START.test(value) &&
+    !hasIndicator &&
+    !RESERVED_SCALAR.test(value)
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 // The project's Codex files, built from the harness and the project config: the working rules and
-// the document budget in `.codex/config.toml`, role agents, the harness skills, workflow skills. Codex reads AGENTS.md
-// itself, so unlike Claude Code there are no files next to it. Only the texts live here; sync.ts
-// decides what to do with them on disk.
+// the document budget in `.codex/config.toml`, role agents, the harness skills, workflow skills.
+// Codex reads AGENTS.md itself, so unlike Claude Code there are no files next to it. Only the texts
+// live here; sync.ts decides what to do with them on disk.
 
 import {
   harnessSkillFiles,

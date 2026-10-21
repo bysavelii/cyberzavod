@@ -48,20 +48,12 @@ describe("parseSkillDocument", () => {
     expect(act).toThrow(SkillError);
   });
 
-  it("отклоняет имя с заглавными буквами или двойным дефисом", () => {
-    const names = ["Review", "review--changes", "-review"];
+  it.each(["Review", "review--changes", "-review"])("отклоняет имя %s", (name) => {
+    const text = skillText(`name: ${name}\ndescription: Проверяет.`);
 
-    const failures = names.filter((name) => {
-      try {
-        parseSkillDocument(skillText(`name: ${name}\ndescription: Проверяет.`));
+    const act = () => parseSkillDocument(text);
 
-        return false;
-      } catch (err) {
-        return err instanceof SkillError;
-      }
-    });
-
-    expect(failures).toEqual(names);
+    expect(act).toThrow(SkillError);
   });
 
   it("отклоняет имя длиннее 64 символов", () => {
@@ -94,6 +86,48 @@ describe("parseSkillDocument", () => {
     expect(act).toThrow(/license/);
   });
 
+  it("отклоняет повтор ключа в шапке", () => {
+    const text = skillText("name: a\nname: b\ndescription: Ведёт задачу.");
+
+    const act = () => parseSkillDocument(text);
+
+    expect(act).toThrow(/key name repeats/);
+  });
+
+  it("отклоняет повтор ключа в metadata", () => {
+    const text = skillText(
+      "name: a\ndescription: Ведёт.\nmetadata:\n  stage: review\n  stage: record",
+    );
+
+    const act = () => parseSkillDocument(text);
+
+    expect(act).toThrow(/key stage repeats/);
+  });
+
+  it("отклоняет значение в строке metadata", () => {
+    const text = skillText("name: a\ndescription: Ведёт.\nmetadata: oops");
+
+    const act = () => parseSkillDocument(text);
+
+    expect(act).toThrow(/metadata must be a map/);
+  });
+
+  it("отклоняет значение с переводом строки", () => {
+    const text = skillText('name: a\ndescription: Ведёт.\nmetadata:\n  title: "x\\ny"');
+
+    const act = () => parseSkillDocument(text);
+
+    expect(act).toThrow(/line break/);
+  });
+
+  it("считает длину описания в символах, а не в единицах UTF-16", () => {
+    const text = skillText(`name: feature\ndescription: ${"😀".repeat(1024)}`);
+
+    const document = parseSkillDocument(text);
+
+    expect([...document.description]).toHaveLength(1024);
+  });
+
   it("отклоняет строку шапки, которая не поле", () => {
     const text = skillText("name: feature\nэто не поле\ndescription: Ведёт задачу.");
 
@@ -111,7 +145,7 @@ describe("yamlString", () => {
   });
 
   it("берёт в кавычки строку, которую YAML прочитал бы иначе", () => {
-    const values = ["Usage: /feature", "true", "1.0", "#tag", " padded"];
+    const values = ["Usage: /feature", "true", "1.0", "#tag", " padded", "a\nb", "a\t# b", ".inf"];
 
     const scalars = values.map(yamlString);
 

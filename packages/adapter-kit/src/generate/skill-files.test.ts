@@ -25,14 +25,18 @@ describe("harnessSkillFiles", () => {
     ]);
   });
 
-  it("пишет скилл, который читается обратно тем же, с полями агента и отметкой", () => {
+  it("пишет поля агента после описания", () => {
     const [main] = harnessSkillFiles([principlesSkill()], PLACEMENT);
-    const content = main?.content ?? "";
 
-    const document = parseSkillDocument(content.replace("user-invocable: false\n", ""));
+    expect(main?.content).toContain(
+      'description: "The principles. Use before: writing code."\nuser-invocable: false\nmetadata:',
+    );
+  });
 
-    expect(content).toContain("user-invocable: false");
-    expect(document).toEqual({
+  it("пишет скилл, который читается обратно тем же, с отметкой после шапки", () => {
+    const [main] = harnessSkillFiles([principlesSkill()], { ...PLACEMENT, agentFields: {} });
+
+    expect(parseSkillDocument(main?.content ?? "")).toEqual({
       name: "principles",
       description: "The principles. Use before: writing code.",
       metadata: { "always-on": "safety" },

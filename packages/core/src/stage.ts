@@ -1,6 +1,6 @@
 // Stages and the workflow. A workflow is the order of stages every task goes through; what the
-// agent does at a stage is described in the stage's harness skill, and here is only the stage vocabulary
-// and validation of the workflow description.
+// agent does at a stage is described in the stage's harness skill, and here is only the stage
+// vocabulary and validation of the workflow description.
 
 import { isLine, isObject } from "./guards.ts";
 

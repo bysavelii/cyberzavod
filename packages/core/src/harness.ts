@@ -267,27 +267,44 @@ function alwaysOnNames(skill: HarnessSkill): Set<string> {
 
 // Every principle is a reference file the skill's instructions link to: an agent that opens the
 // skill finds a principle only through that link.
-function principlesOf(skill: HarnessSkill): Principle[] {
-  const references = skill.files.filter(({ path }) => path.startsWith(REFERENCES));
-  const alwaysOn = alwaysOnNames(skill);
-  const principles = references.map(({ path, text }) => {
-    const name = path.slice(REFERENCES.length, -MARKDOWN.length);
+function rejectUnlinkedReferences(skill: HarnessSkill, references: readonly SkillFile[]): void {
+  const unlinked = references.filter(({ path }) => !skill.body.includes(`(${path})`));
 
-    if (!skill.body.includes(`(${path})`)) {
-      throw new HarnessError(`skill ${skill.name}: instructions do not link ${path}`);
-    }
+  if (unlinked.length > 0) {
+    const paths = unlinked.map(({ path }) => path).join(", ");
 
-    return { name, text, isAlwaysOn: alwaysOn.has(name) };
-  });
-  const unknown = [...alwaysOn].filter(
-    (name) => !principles.some((principle) => principle.name === name),
-  );
+    throw new HarnessError(`skill ${skill.name}: instructions do not link ${paths}`);
+  }
+}
+
+function rejectUnknownAlwaysOn(skill: HarnessSkill, principles: readonly Principle[]): void {
+  const known = new Set(principles.map(({ name }) => name));
+  const unknown = [...alwaysOnNames(skill)].filter((name) => !known.has(name));
 
   if (unknown.length > 0) {
     throw new HarnessError(
       `skill ${skill.name}: ${ALWAYS_ON} names no principle ${unknown.join(", ")}`,
     );
   }
+}
+
+function principlesOf(skill: HarnessSkill): Principle[] {
+  const references = skill.files.filter(({ path }) => path.startsWith(REFERENCES));
+  const alwaysOn = alwaysOnNames(skill);
+
+  return references.map(({ path, text }) => {
+    const name = path.slice(REFERENCES.length, -MARKDOWN.length);
+
+    return { name, text, isAlwaysOn: alwaysOn.has(name) };
+  });
+}
+
+function validPrinciplesOf(skill: HarnessSkill): Principle[] {
+  const references = skill.files.filter(({ path }) => path.startsWith(REFERENCES));
+  const principles = principlesOf(skill);
+
+  rejectUnlinkedReferences(skill, references);
+  rejectUnknownAlwaysOn(skill, principles);
 
   return principles;
 }
@@ -304,7 +321,7 @@ export function parseHarness(files: HarnessFiles): Harness {
   const directories = [...skillDirectories(files)];
   const allSkills = directories.map(([directory, skillFiles]) => skillOf(directory, skillFiles));
   const lead = requiredSkill(allSkills, LEAD_SKILL);
-  const principles = principlesOf(requiredSkill(allSkills, PRINCIPLES_SKILL));
+  const principles = validPrinciplesOf(requiredSkill(allSkills, PRINCIPLES_SKILL));
   const workflows = filesIn(files, WORKFLOWS, JSON_EXTENSION).map(([name, text]) =>
     workflowFrom(name, text),
   );

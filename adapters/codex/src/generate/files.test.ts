@@ -177,14 +177,20 @@ describe("codexFiles", () => {
     expect(role.developer_instructions).toEqual(expect.stringContaining("Stage text Code."));
   });
 
-  it("роль несёт принципы, которых нет в правилах работы, а config.toml называет их скилл", () => {
+  it("config.toml оставляет прочие принципы в скилле и называет его", () => {
     const project = codexProject();
-    const rules = parse(fileOf(project, CONFIG_FILE)).developer_instructions as string;
 
-    const role = parse(fileOf(project, ".codex/agents/coder.toml"));
+    const rules = parse(fileOf(project, CONFIG_FILE)).developer_instructions as string;
 
     expect(rules).not.toContain("## Scope");
     expect(rules).toContain("`.agents/skills/principles/SKILL.md`");
+  });
+
+  it("роль несёт принципы, которых нет в правилах работы", () => {
+    const project = codexProject();
+
+    const role = parse(fileOf(project, ".codex/agents/coder.toml"));
+
     expect(role.developer_instructions).toEqual(expect.stringContaining("## Scope"));
   });
 
