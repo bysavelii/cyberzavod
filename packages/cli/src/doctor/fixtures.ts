@@ -93,7 +93,7 @@ export async function projectContext(
     project,
     installation: await readInstallation(),
     messages,
-    adapter: adapters.claude,
+    adapters: [adapters.claude],
     language: "en",
     isProgramAvailable: async () => true,
     runCommand,

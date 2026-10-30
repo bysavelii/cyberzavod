@@ -6,8 +6,13 @@
 import type { SyncReport } from "@cyberzavod/adapter-kit";
 import type { ProjectConfig } from "@cyberzavod/core";
 import { LEGACY_TOOL_FILE, PROJECT_CONFIG_FILE, writeProjectConfig } from "@cyberzavod/storage";
-import type { AgentAdapter, CarriedOver, FilesRequest } from "../agents/agent-adapter.ts";
-import { adapterFor } from "../agents/host-agent.ts";
+import type {
+  AgentAdapter,
+  CarriedOver,
+  FilesRequest,
+  UserConfigChange,
+} from "../agents/agent-adapter.ts";
+import { connectedAdaptersOf, type NonEmpty } from "../agents/host-agent.ts";
 import type { Adapters } from "../agents/registry.ts";
 import { detectProject, stackOf } from "../detect.ts";
 import { HARNESS_VERSION, type Installation } from "../installation/installation.ts";
@@ -66,7 +71,11 @@ function printWrittenReport(report: SyncReport, messages: CliMessages): void {
   if (isClean(report)) console.log(sync.upToDate);
 }
 
-function printPreview(report: SyncReport, adapter: AgentAdapter, messages: CliMessages): void {
+function printPreview(
+  report: SyncReport,
+  adapters: readonly AgentAdapter[],
+  messages: CliMessages,
+): void {
   const { sync } = messages;
 
   printFiles(sync.willAdd, report.added);
@@ -74,13 +83,24 @@ function printPreview(report: SyncReport, adapter: AgentAdapter, messages: CliMe
   printFiles(sync.willRemove, report.removed);
   printFiles(sync.yours, report.conflicts);
   printFiles(sync.edited, report.edited);
-  console.log(sync.neverTouched(adapter.terms));
+
+  for (const adapter of adapters) console.log(sync.neverTouched(adapter.terms));
 }
 
 function withLegacyTool(report: SyncReport, isLegacyToolRemoved: boolean): SyncReport {
   return isLegacyToolRemoved
     ? { ...report, removed: [LEGACY_TOOL_FILE, ...report.removed] }
     : report;
+}
+
+function mergedReport(reports: readonly SyncReport[]): SyncReport {
+  return {
+    added: reports.flatMap((report) => report.added),
+    updated: reports.flatMap((report) => report.updated),
+    removed: reports.flatMap((report) => report.removed),
+    conflicts: reports.flatMap((report) => report.conflicts),
+    edited: reports.flatMap((report) => report.edited),
+  };
 }
 
 function isClean(report: SyncReport): boolean {
@@ -114,16 +134,19 @@ export interface ProjectFilesInspection {
  * Compares the project's agent files with what the running version would build, writing nothing.
  * @param {ProjectAt} project Connected project.
  * @param {Installation} installation The running Cyberzavod version.
- * @param {AgentAdapter} adapter Adapter of the agent that drives the project.
- * @returns {Promise<ProjectFilesInspection>} File and version differences.
+ * @param {readonly AgentAdapter[]} adapters Adapters of the agents that drive the project.
+ * @returns {Promise<ProjectFilesInspection>} File and version differences of all the agents.
  * @throws {Error} If the agent files cannot be built.
  */
 export async function inspectProjectFiles(
   project: ProjectAt,
   installation: Installation,
-  adapter: AgentAdapter,
+  adapters: readonly AgentAdapter[],
 ): Promise<ProjectFilesInspection> {
-  const adapterReport = await adapter.inspectFiles(project.root, installation);
+  const reports = await Promise.all(
+    adapters.map((adapter) => adapter.inspectFiles(project.root, installation)),
+  );
+  const adapterReport = mergedReport(reports);
   const isLegacyToolPresent = await hasLegacyTool(project.root);
 
   return {
@@ -135,7 +158,7 @@ export async function inspectProjectFiles(
 
 function printPreviewText(
   inspection: ProjectFilesInspection,
-  adapter: AgentAdapter,
+  adapters: readonly AgentAdapter[],
   messages: CliMessages,
 ): void {
   const { report, configVersion, isHarnessOutdated } = inspection;
@@ -151,7 +174,7 @@ function printPreviewText(
     );
   }
 
-  printPreview(report, adapter, messages);
+  printPreview(report, adapters, messages);
   console.log(conclusionOf(status, isHarnessOutdated, messages));
 }
 
@@ -190,11 +213,11 @@ function printPreviewJson(inspection: ProjectFilesInspection): void {
 export async function previewProject(directory: string, options: PreviewOptions): Promise<boolean> {
   const { installation, messages, adapters, isJson } = options;
   const project = await requireProjectAt(directory);
-  const adapter = adapterFor(project.config, adapters);
-  const inspection = await inspectProjectFiles(project, installation, adapter);
+  const connected = connectedAdaptersOf(project.config, adapters);
+  const inspection = await inspectProjectFiles(project, installation, connected);
 
   if (isJson) printPreviewJson(inspection);
-  else printPreviewText(inspection, adapter, messages);
+  else printPreviewText(inspection, connected, messages);
 
   return isClean(inspection.report) && !inspection.isHarnessOutdated;
 }
@@ -211,10 +234,23 @@ async function syncFilesCarryingTrust(
   return adapter.userConfig.carryOver(request.projectDirectory, writeFiles);
 }
 
+async function requireWritableFiles(
+  project: ProjectAt,
+  config: ProjectConfig,
+  installation: Installation,
+  adapters: NonEmpty<AgentAdapter>,
+): Promise<void> {
+  for (const adapter of adapters) {
+    adapter.requireWritable(
+      await adapter.previewFiles({ root: project.root, config }, installation),
+    );
+  }
+}
+
 /**
- * Syncs the project with the harness: updates the config and agent files, removes the CLI of
- * earlier versions. If the generator runs into the human's files, nothing changes, the config
- * included.
+ * Syncs the project with the harness: updates the config and the files of every connected agent,
+ * removes the CLI of earlier versions. If a generator runs into the human's files, nothing
+ * changes, the config included.
  * @param {string} directory Directory inside the project.
  * @param {SyncCommandOptions} options Whether to overwrite the human's files, version, messages,
  *   adapters.
@@ -224,16 +260,12 @@ async function syncFilesCarryingTrust(
 export async function syncProject(directory: string, options: SyncCommandOptions): Promise<void> {
   const { force, installation, messages, adapters } = options;
   const project = await requireProjectAt(directory);
-  const adapter = adapterFor(project.config, adapters);
+  const connected = connectedAdaptersOf(project.config, adapters);
   const config = await refreshedConfig(project.root, project.config);
 
   // The human's files are looked for before the first write: on a conflict the config stays as it
   // was.
-  if (!force) {
-    adapter.requireWritable(
-      await adapter.previewFiles({ root: project.root, config }, installation),
-    );
-  }
+  if (!force) await requireWritableFiles(project, config, installation, connected);
 
   await writeProjectConfig(project.root, config);
 
@@ -241,13 +273,19 @@ export async function syncProject(directory: string, options: SyncCommandOptions
 
   if (isLegacyToolPresent) await removeLegacyTool(project.root);
 
-  const { value: report, change } = await syncFilesCarryingTrust(adapter, {
-    projectDirectory: project.root,
-    installation,
-    force,
-  });
+  const reports: SyncReport[] = [];
+  const changes: UserConfigChange[] = [];
 
-  printWrittenReport(withLegacyTool(report, isLegacyToolPresent), messages);
+  for (const adapter of connected) {
+    const request = { projectDirectory: project.root, installation, force };
+    const { value, change } = await syncFilesCarryingTrust(adapter, request);
 
-  if (change !== undefined) console.log(messages.sync.trustRefreshed(change.file));
+    reports.push(value);
+
+    if (change !== undefined) changes.push(change);
+  }
+
+  printWrittenReport(withLegacyTool(mergedReport(reports), isLegacyToolPresent), messages);
+
+  for (const change of changes) console.log(messages.sync.trustRefreshed(change.file));
 }

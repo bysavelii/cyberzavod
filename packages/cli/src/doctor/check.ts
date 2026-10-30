@@ -2,6 +2,7 @@
 
 import type { InterfaceLanguage } from "@cyberzavod/core";
 import type { AgentAdapter } from "../agents/agent-adapter.ts";
+import type { NonEmpty } from "../agents/host-agent.ts";
 import type { ProjectAt } from "../commands/project.ts";
 import type { Installation } from "../installation/installation.ts";
 import type { CliMessages } from "../messages/cli-messages.ts";
@@ -68,15 +69,16 @@ export type CommandRun = { kind: "exited"; code: number } | { kind: "notStarted"
 export type CommandRunner = (command: string, root: string) => CommandRun;
 
 /**
- * Everything project checks need: the project itself, its agent's adapter, CLI version, texts and
+ * Everything project checks need: the project itself, its agents' adapters, CLI version, texts and
  * program access.
  */
 export interface ProjectContext {
   project: ProjectAt;
   installation: Installation;
   messages: CliMessages;
-  adapter: AgentAdapter;
-  /** Language of the texts that come from the adapter. */
+  /** Adapters of the connected agents; the first one speaks for the project in shared texts. */
+  adapters: NonEmpty<AgentAdapter>;
+  /** Language of the texts that come from the adapters. */
   language: InterfaceLanguage;
   /**
    * Whether the program exists: a word with `/` or `\` is a file from `root`, otherwise a `PATH`
@@ -90,6 +92,8 @@ export interface ProjectContext {
 export interface MachineCheck {
   /** Check code in JSON output: stable across versions. */
   id: string;
+  /** The agent the check is about, if it is about one. */
+  agent?: string;
   run(machine: Machine, messages: CliMessages): Promise<CheckResult>;
 }
 
@@ -97,5 +101,7 @@ export interface MachineCheck {
 export interface ProjectCheck {
   /** Check code in JSON output: stable across versions. */
   id: string;
+  /** The agent the check is about, if it is about one. */
+  agent?: string;
   run(context: ProjectContext): Promise<CheckResult>;
 }

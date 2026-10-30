@@ -3,9 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { LEGACY_TOOL_FILE } from "@cyberzavod/storage";
 import { connectedProject, projectContext } from "./fixtures.ts";
-import { hooksCheck } from "./hooks.ts";
+import { adapters } from "../agents/fixtures.ts";
+import { hooksCheckFor } from "./hooks.ts";
 
 const SETTINGS = ".claude/settings.json";
+const hooksCheck = hooksCheckFor(adapters.claude);
 const SYNC_FIX = "run npx cyberzavod sync";
 
 async function rewriteSettings(
@@ -18,7 +20,7 @@ async function rewriteSettings(
   await writeFile(file, JSON.stringify(change(settings)));
 }
 
-describe("hooksCheck", () => {
+describe("hooksCheckFor", () => {
   it("видит хуки, которые поставил init", async () => {
     const project = await connectedProject();
 

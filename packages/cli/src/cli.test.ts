@@ -600,7 +600,7 @@ describe("runCli", () => {
     });
   });
 
-  it("sync со смешанными агентами в конфиге выходит с 1 и называет агентов", async () => {
+  it("sync с неизвестным агентом среди подключённых выходит с 1 и называет поддерживаемых", async () => {
     await initialized();
     await rewriteAgents({
       claude: { implementation: { provider: "anthropic" } },
@@ -611,8 +611,7 @@ describe("runCli", () => {
 
     expect({ code, error: printedError() }).toEqual({
       code: 1,
-      error:
-        "cyberzavod sync: .cyberzavod/project.json names several agents (claude, gemini): a project is driven by one agent",
+      error: "cyberzavod sync: the agent “gemini” is not supported: available are claude, codex",
     });
   });
 

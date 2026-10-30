@@ -3,6 +3,7 @@
 
 import type { InterfaceLanguage } from "@cyberzavod/core";
 import type { AgentAdapter } from "../agents/agent-adapter.ts";
+import type { NonEmpty } from "../agents/host-agent.ts";
 import type {
   CheckResult,
   Machine,
@@ -15,7 +16,7 @@ import { freshnessCheck } from "../doctor/freshness.ts";
 import { galleryCheck } from "../doctor/gallery.ts";
 import { gitCheck } from "../doctor/git.ts";
 import { gitignoreCheck } from "../doctor/gitignore.ts";
-import { hooksCheck } from "../doctor/hooks.ts";
+import { hooksCheckFor } from "../doctor/hooks.ts";
 import { nodeCheck } from "../doctor/node.ts";
 import { rulesCheck } from "../doctor/rules.ts";
 import type { Installation } from "../installation/installation.ts";
@@ -41,9 +42,9 @@ export interface DoctorOptions {
   projectTools: ProjectTools;
   installation: Installation;
   messages: CliMessages;
-  /** Adapter of the agent that drives the project, or the default one without a project. */
-  adapter: AgentAdapter;
-  /** Language of the texts that come from the adapter. */
+  /** Adapters of the agents that drive the project, or the default one without a project. */
+  adapters: NonEmpty<AgentAdapter>;
+  /** Language of the texts that come from the adapters. */
   language: InterfaceLanguage;
   /** Print the result as one JSON document rather than lines for the human. */
   isJson: boolean;
@@ -52,33 +53,49 @@ export interface DoctorOptions {
 /** A check result with its code. */
 interface IdentifiedResult {
   id: string;
+  /** The agent the check is about, if it is about one. */
+  agent: string | undefined;
   result: CheckResult;
+}
+
+function aboutAgent<Check extends MachineCheck | ProjectCheck>(
+  check: Check,
+  adapter: AgentAdapter,
+): Check {
+  return { ...check, agent: adapter.name };
 }
 
 /**
  * Machine checks in display order: they run before project checks and do not depend on them.
- * @param {AgentAdapter} adapter Adapter of the agent whose program is checked.
- * @returns {MachineCheck[]} Node, git, the agent's program and the gallery.
+ * @param {NonEmpty<AgentAdapter>} adapters Adapters of the agents whose programs are checked.
+ * @returns {MachineCheck[]} Node, git, the agents' programs and the gallery.
  */
-export function machineChecksFor(adapter: AgentAdapter): MachineCheck[] {
-  return [nodeCheck, gitCheck, adapter.programCheck, galleryCheck];
+export function machineChecksFor(adapters: NonEmpty<AgentAdapter>): MachineCheck[] {
+  const programChecks = adapters.map((adapter) => aboutAgent(adapter.programCheck, adapter));
+
+  return [nodeCheck, gitCheck, ...programChecks, galleryCheck];
+}
+
+function checksOfAgent(adapter: AgentAdapter): ProjectCheck[] {
+  const checks = [hooksCheckFor(adapter), ...adapter.extraProjectChecks];
+
+  return checks.map((check) => aboutAgent(check, adapter));
 }
 
 /**
  * Project checks in display order; the commands check is the one the caller chose: find the
  * programs or run the commands.
  * @param {ProjectCheck} commandsCheck Check of the project's check commands.
- * @param {AgentAdapter} adapter Adapter of the agent that drives the project.
- * @returns {ProjectCheck[]} Hooks, the agent's own checks, agent files, rules, commands and
+ * @param {NonEmpty<AgentAdapter>} adapters Adapters of the agents that drive the project.
+ * @returns {ProjectCheck[]} Each agent's hooks and own checks, agent files, rules, commands and
  *   `.gitignore`.
  */
 export function projectChecksWith(
   commandsCheck: ProjectCheck,
-  adapter: AgentAdapter,
+  adapters: NonEmpty<AgentAdapter>,
 ): ProjectCheck[] {
   return [
-    hooksCheck,
-    ...adapter.extraProjectChecks,
+    ...adapters.flatMap(checksOfAgent),
     freshnessCheck,
     rulesCheck,
     commandsCheck,
@@ -118,15 +135,15 @@ async function* resultsOf(
   directory: string,
   options: DoctorOptions,
 ): AsyncGenerator<IdentifiedResult> {
-  const { machine, messages, installation, adapter, language, projectTools } = options;
+  const { machine, messages, installation, adapters, language, projectTools } = options;
 
-  for (const check of machineChecksFor(adapter)) {
-    yield { id: check.id, result: await check.run(machine, messages) };
+  for (const check of machineChecksFor(adapters)) {
+    yield { id: check.id, agent: check.agent, result: await check.run(machine, messages) };
   }
 
   const { result, project } = await configCheck(directory, messages);
 
-  yield { id: CONFIG_CHECK_ID, result };
+  yield { id: CONFIG_CHECK_ID, agent: undefined, result };
 
   if (project === undefined) return;
 
@@ -134,24 +151,26 @@ async function* resultsOf(
     project,
     installation,
     messages,
-    adapter,
+    adapters,
     language,
     ...projectTools,
   };
 
   for (const check of options.projectChecks) {
-    yield { id: check.id, result: await check.run(context) };
+    yield { id: check.id, agent: check.agent, result: await check.run(context) };
   }
 }
 
-function jsonOf({ id, result }: IdentifiedResult) {
+function jsonOf({ id, agent, result }: IdentifiedResult) {
+  const about = agent === undefined ? {} : { agent };
+
   switch (result.status) {
     case "passed":
-      return { id, status: result.status, message: result.summary };
+      return { id, ...about, status: result.status, message: result.summary };
     case "failed":
-      return { id, status: result.status, message: result.problem, fix: result.fix };
+      return { id, ...about, status: result.status, message: result.problem, fix: result.fix };
     case "notice":
-      return { id, status: result.status, message: result.summary, hint: result.hint };
+      return { id, ...about, status: result.status, message: result.summary, hint: result.hint };
   }
 }
 

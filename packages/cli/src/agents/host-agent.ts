@@ -1,12 +1,7 @@
-// Which agent drives the project: the one connected in the agents of its config.
+// Which agents drive the project: the ones connected in the agents of its config.
 
 import type { ProjectConfig } from "@cyberzavod/core";
-import {
-  findProjectRoot,
-  ProjectFileError,
-  PROJECT_CONFIG_FILE,
-  readProjectConfig,
-} from "@cyberzavod/storage";
+import { findProjectRoot, ProjectFileError, readProjectConfig } from "@cyberzavod/storage";
 import { CommandError } from "../errors.ts";
 import {
   AGENT_NAMES,
@@ -18,6 +13,9 @@ import {
 import type { Adapters } from "./registry.ts";
 
 const LIST_SEPARATOR = ", ";
+
+/** A list that has at least one element: a project is always driven by some agent. */
+export type NonEmpty<T> = readonly [T, ...T[]];
 
 /**
  * The agent a person or a hook file named with `--agent`.
@@ -34,73 +32,100 @@ export function agentNamed(name: string): AgentName {
 }
 
 /**
- * Agents connected to the project, in order of connection.
+ * Names of the agents the config lists, in order of connection; the default one if it lists none.
+ * The names are not checked: for texts that must be printed even for a config
+ * `connectedAgentsOf` rejects.
  * @param {ProjectConfig} config Project config.
- * @returns {string[]} Agent names; empty if no agent is connected.
+ * @returns {NonEmpty<string>} Agent names, supported or not.
  */
-export function namedAgentsOf(config: ProjectConfig): string[] {
-  return Object.keys(config.agents);
+export function agentNamesOf(config: ProjectConfig): NonEmpty<string> {
+  const [first = DEFAULT_AGENT_NAME, ...rest] = Object.keys(config.agents);
+
+  return [first, ...rest];
+}
+
+function supportedAgent(name: string): AgentName {
+  if (isAgentName(name)) return name;
+
+  const supported = AGENT_NAMES.join(LIST_SEPARATOR);
+
+  throw new CommandError((m) => m.errors.unsupportedAgent({ agent: name, supported }));
 }
 
 /**
- * The first agent connected in the config, or the default one: for texts that must be printed even for a
- * config `hostAgentOf` rejects.
+ * The agents that drive the project, in order of connection. Without agents in the config it is
+ * the default one; the provider is checked later by the agent's adapter.
  * @param {ProjectConfig} config Project config.
- * @returns {string} Agent name, supported or not.
+ * @returns {NonEmpty<AgentName>} The connected agents.
+ * @throws {CommandError} If the config names an agent the CLI cannot drive.
  */
-export function firstAgentNameOf(config: ProjectConfig): string {
-  const [name = DEFAULT_AGENT_NAME] = namedAgentsOf(config);
+export function connectedAgentsOf(config: ProjectConfig): NonEmpty<AgentName> {
+  const [first, ...rest] = agentNamesOf(config);
 
-  return name;
+  return [supportedAgent(first), ...rest.map(supportedAgent)];
 }
 
 /**
- * The agent that drives the project: one agent for all stages. Without agents in the config it
- * is the default one; the provider is checked later by the agent's adapter.
- * @param {ProjectConfig} config Project config.
- * @returns {AgentName} The project's agent.
- * @throws {CommandError} If the config names an agent the CLI cannot drive or several agents.
- */
-export function hostAgentOf(config: ProjectConfig): AgentName {
-  const names = namedAgentsOf(config);
-
-  if (names.length > 1) {
-    const agents = names.join(LIST_SEPARATOR);
-
-    throw new CommandError((m) => m.errors.mixedAgents({ agents, file: PROJECT_CONFIG_FILE }));
-  }
-
-  const name = firstAgentNameOf(config);
-
-  if (!isAgentName(name)) {
-    const supported = AGENT_NAMES.join(LIST_SEPARATOR);
-
-    throw new CommandError((m) => m.errors.unsupportedAgent({ agent: name, supported }));
-  }
-
-  return name;
-}
-
-/**
- * The adapter of the agent that drives the project.
+ * The adapters of the agents that drive the project.
  * @param {ProjectConfig} config Project config.
  * @param {Adapters} adapters Adapters by agent name.
- * @returns {AgentAdapter} The project's adapter.
- * @throws {CommandError} If the config names an unsupported agent or several agents.
+ * @returns {NonEmpty<AgentAdapter>} The connected agents' adapters, in order of connection.
+ * @throws {CommandError} If the config names an agent the CLI cannot drive.
  */
-export function adapterFor(config: ProjectConfig, adapters: Adapters): AgentAdapter {
-  return adapters[hostAgentOf(config)];
+export function connectedAdaptersOf(
+  config: ProjectConfig,
+  adapters: Adapters,
+): NonEmpty<AgentAdapter> {
+  const [first, ...rest] = connectedAgentsOf(config);
+
+  return [adapters[first], ...rest.map((name) => adapters[name])];
 }
 
 /**
- * The adapter for the project around the directory, for commands that must work when the project
+ * The adapter for a command that works with one agent (`draft`, `publish`): the one the person
+ * named with `--agent`, or the only connected one.
+ * @param {ProjectConfig} config Project config.
+ * @param {Adapters} adapters Adapters by agent name.
+ * @param {string | undefined} name `--agent` as typed, if given.
+ * @returns {AgentAdapter} The agent's adapter.
+ * @throws {CommandError} If the name is unknown or the agent is not connected, or there is no name
+ *   and several agents are connected.
+ */
+export function adapterNamed(
+  config: ProjectConfig,
+  adapters: Adapters,
+  name: string | undefined,
+): AgentAdapter {
+  const connected = connectedAgentsOf(config);
+  const list = connected.join(LIST_SEPARATOR);
+
+  if (name !== undefined) {
+    const requested = agentNamed(name);
+
+    if (connected.includes(requested)) return adapters[requested];
+
+    throw new CommandError((m) => m.errors.agentNotConnected({ agent: requested, agents: list }));
+  }
+
+  const [only, ...others] = connected;
+
+  if (others.length > 0) throw new CommandError((m) => m.errors.agentRequired(list));
+
+  return adapters[only];
+}
+
+/**
+ * The adapters for the project around the directory, for commands that must work when the project
  * is missing or its config is unusable: then it is the default agent's adapter.
  * @param {string} directory Directory the command was run from.
  * @param {Adapters} adapters Adapters by agent name.
- * @returns {Promise<AgentAdapter>} The project's adapter or the default one.
+ * @returns {Promise<NonEmpty<AgentAdapter>>} The project's adapters or the default one.
  */
-export async function adapterAt(directory: string, adapters: Adapters): Promise<AgentAdapter> {
-  const fallback = adapters[DEFAULT_AGENT_NAME];
+export async function adaptersAt(
+  directory: string,
+  adapters: Adapters,
+): Promise<NonEmpty<AgentAdapter>> {
+  const fallback: NonEmpty<AgentAdapter> = [adapters[DEFAULT_AGENT_NAME]];
   const root = await findProjectRoot(directory);
 
   if (root === undefined) return fallback;
@@ -108,7 +133,7 @@ export async function adapterAt(directory: string, adapters: Adapters): Promise<
   try {
     const config = await readProjectConfig(root);
 
-    return config === undefined ? fallback : adapterFor(config, adapters);
+    return config === undefined ? fallback : connectedAdaptersOf(config, adapters);
   } catch (err) {
     if (err instanceof CommandError || err instanceof ProjectFileError) return fallback;
 

@@ -20,7 +20,7 @@ describe("localRecordingsOf", () => {
     const project = await projectWith(["2026-10-07-first"]);
     const adapter = adapterShowing([validSession("draft-build")]);
 
-    const recordings = await localRecordingsOf(project, adapter, "ru");
+    const recordings = await localRecordingsOf(project, [adapter], "ru");
 
     expect({
       published: recordings.published.map((record) => record.id),
@@ -28,11 +28,21 @@ describe("localRecordingsOf", () => {
     }).toEqual({ published: ["2026-10-07-first"], drafts: ["draft-build"] });
   });
 
+  it("склеивает черновики всех агентов проекта", async () => {
+    const project = await projectWith([]);
+    const claude = adapterShowing([validSession("claude-build")]);
+    const codex = adapterShowing([validSession("codex-build")]);
+
+    const recordings = await localRecordingsOf(project, [claude, codex], "en");
+
+    expect(recordings.drafts.map((record) => record.id)).toEqual(["claude-build", "codex-build"]);
+  });
+
   it("прячет сборку черновика, чей id уже есть среди записей", async () => {
     const project = await projectWith(["2026-10-07-first"]);
     const adapter = adapterShowing([validSession("2026-10-07-first"), validSession("new-build")]);
 
-    const recordings = await localRecordingsOf(project, adapter, "ru");
+    const recordings = await localRecordingsOf(project, [adapter], "ru");
 
     expect(recordings.drafts.map((record) => record.id)).toEqual(["new-build"]);
   });
@@ -40,7 +50,7 @@ describe("localRecordingsOf", () => {
   it("при пустом журнале и без черновиков даёт два пустых списка", async () => {
     const project = await projectWith([]);
 
-    const recordings = await localRecordingsOf(project, adapterShowing([]), "en");
+    const recordings = await localRecordingsOf(project, [adapterShowing([])], "en");
 
     expect(recordings).toEqual({ published: [], drafts: [] });
   });
@@ -50,7 +60,7 @@ describe("localRecordingsOf", () => {
     const adapter = adapterShowing([]);
     const previewDrafts = vi.spyOn(adapter, "previewDrafts");
 
-    await localRecordingsOf(project, adapter, "en");
+    await localRecordingsOf(project, [adapter], "en");
 
     expect(previewDrafts).toHaveBeenCalledWith({
       projectDirectory: project.root,
@@ -61,10 +71,10 @@ describe("localRecordingsOf", () => {
   it("читает журнал заново при каждом вызове", async () => {
     const project = await projectWith([]);
     const adapter = adapterShowing([]);
-    const before = await localRecordingsOf(project, adapter, "en");
+    const before = await localRecordingsOf(project, [adapter], "en");
 
     await writeSessionFile(project.root, "later", JSON.stringify(validSession("later")));
-    const after = await localRecordingsOf(project, adapter, "en");
+    const after = await localRecordingsOf(project, [adapter], "en");
 
     expect({ before: before.published.length, after: after.published.length }).toEqual({
       before: 0,
@@ -77,7 +87,7 @@ describe("localRecordingsOf", () => {
 
     await writeSessionFile(project.root, "broken", "{ not json");
 
-    const act = () => localRecordingsOf(project, adapterShowing([]), "en");
+    const act = () => localRecordingsOf(project, [adapterShowing([])], "en");
 
     await expect(act()).rejects.toBeInstanceOf(JournalError);
   });

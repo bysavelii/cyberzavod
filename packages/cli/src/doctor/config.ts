@@ -8,7 +8,7 @@ import {
   PROJECT_CONFIG_FILE,
   readProjectConfig,
 } from "@cyberzavod/storage";
-import { hostAgentOf } from "../agents/host-agent.ts";
+import { connectedAgentsOf } from "../agents/host-agent.ts";
 import type { ProjectConfig } from "@cyberzavod/core";
 import type { ProjectAt } from "../commands/project.ts";
 import { CommandError } from "../errors.ts";
@@ -45,7 +45,7 @@ function agentsProblem(
   messages: CliMessages,
 ): ConfigCheckOutcome | undefined {
   try {
-    hostAgentOf(config);
+    connectedAgentsOf(config);
 
     return undefined;
   } catch (err) {

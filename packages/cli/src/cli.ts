@@ -6,7 +6,7 @@ import { parseArgs } from "node:util";
 import { RecordError, type InterfaceLanguage, type LocalizedText } from "@cyberzavod/core";
 import { JournalError, ProjectFileError } from "@cyberzavod/storage";
 import { DEFAULT_AGENT_NAME, type AgentAdapter } from "./agents/agent-adapter.ts";
-import { adapterAt, adapterFor, agentNamed } from "./agents/host-agent.ts";
+import { adapterNamed, adaptersAt, agentNamed, type NonEmpty } from "./agents/host-agent.ts";
 import { createAdapters, type Adapters } from "./agents/registry.ts";
 import { projectChecksWith, runDoctor, type DoctorOptions } from "./commands/doctor.ts";
 import { galleryAccessOf, showGallery } from "./commands/gallery.ts";
@@ -98,9 +98,9 @@ function defaultSharing(env: Environment): Sharing {
   return createSharing({ env, platform: process.platform, homeDirectory: homedir() });
 }
 
-/** What `doctor` is run with: the project's adapter and the chosen commands check. */
+/** What `doctor` is run with: the project's adapters and the chosen commands check. */
 interface DoctorPlan {
-  adapter: AgentAdapter;
+  adapters: NonEmpty<AgentAdapter>;
   commandsCheck: ProjectCheck;
 }
 
@@ -111,7 +111,7 @@ function doctorOptionsOf(
   doctorPlan: DoctorPlan,
 ): Omit<DoctorOptions, "isJson"> {
   const { directory, env, messages, language } = invocation;
-  const { adapter, commandsCheck } = doctorPlan;
+  const { adapters, commandsCheck } = doctorPlan;
   const platform = process.platform;
   const credentials = new FileCredentialsStore(
     credentialsFile({ env, platform, homeDirectory: homedir() }),
@@ -123,14 +123,14 @@ function doctorOptionsOf(
       credentials,
       isProgramAvailable: (name) => isProgramAvailable({ name, root: directory, env, platform }),
     },
-    projectChecks: projectChecksWith(commandsCheck, adapter),
+    projectChecks: projectChecksWith(commandsCheck, adapters),
     projectTools: {
       isProgramAvailable: (name, root) => isProgramAvailable({ name, root, env, platform }),
       runCommand: runCommandInShell,
     },
     installation,
     messages,
-    adapter,
+    adapters,
     language,
   };
 }
@@ -240,9 +240,9 @@ const COMMANDS: Readonly<Record<CommandName, Command>> = {
         options: { "run-checks": { type: "boolean" }, json: { type: "boolean" } },
       });
       const commandsCheck = values["run-checks"] === true ? commandsPassCheck : commandsFoundCheck;
-      const adapter = await adapterAt(invocation.directory, invocation.adapters);
+      const adapters = await adaptersAt(invocation.directory, invocation.adapters);
       const options = {
-        ...doctorOptionsOf(invocation, await readInstallation(), { adapter, commandsCheck }),
+        ...doctorOptionsOf(invocation, await readInstallation(), { adapters, commandsCheck }),
         isJson: values.json === true,
       };
       const isHealthy = await runDoctor(invocation.directory, options);
@@ -327,11 +327,15 @@ const COMMANDS: Readonly<Record<CommandName, Command>> = {
   draft: {
     section: "service",
     run: async ({ args, directory, language, adapters }) => {
-      const { positionals } = parseArgs({ args, allowPositionals: true });
+      const { positionals, values } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: { agent: { type: "string" } },
+      });
       const [rawPath] = positionals;
       const { config } = await requireProjectAt(directory);
 
-      await adapterFor(config, adapters).draftSession({
+      await adapterNamed(config, adapters, values.agent).draftSession({
         projectDirectory: directory,
         language,
         ...(rawPath === undefined ? {} : { rawPath }),
@@ -345,10 +349,14 @@ const COMMANDS: Readonly<Record<CommandName, Command>> = {
     run: async ({ args, directory, language, adapters }) => {
       const { values } = parseArgs({
         args,
-        options: { draft: { type: "string" }, build: { type: "string" } },
+        options: {
+          agent: { type: "string" },
+          draft: { type: "string" },
+          build: { type: "string" },
+        },
       });
       const { config } = await requireProjectAt(directory);
-      const published = await adapterFor(config, adapters).publishSessions({
+      const published = await adapterNamed(config, adapters, values.agent).publishSessions({
         projectDirectory: directory,
         language,
         ...(values.draft === undefined ? {} : { draftPath: values.draft }),

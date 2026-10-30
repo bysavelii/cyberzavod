@@ -42,7 +42,7 @@ describe("inspectProjectFiles", () => {
   it("на свежем проекте ничего не находит", async () => {
     const project = await requireProjectAt(root);
 
-    const inspection = await inspectProjectFiles(project, installation, adapters.claude);
+    const inspection = await inspectProjectFiles(project, installation, [adapters.claude]);
 
     expect(inspection).toEqual({
       report: { added: [], updated: [], removed: [], conflicts: [], edited: [] },
@@ -55,8 +55,8 @@ describe("inspectProjectFiles", () => {
     await appendFile(path.join(root, "CLAUDE.md"), "\nstale\n");
     const project = await requireProjectAt(root);
 
-    const first = await inspectProjectFiles(project, installation, adapters.claude);
-    const second = await inspectProjectFiles(project, installation, adapters.claude);
+    const first = await inspectProjectFiles(project, installation, [adapters.claude]);
+    const second = await inspectProjectFiles(project, installation, [adapters.claude]);
 
     expect({ edited: first.report.edited, again: second.report.edited }).toEqual({
       edited: ["CLAUDE.md"],
@@ -68,7 +68,7 @@ describe("inspectProjectFiles", () => {
     await writeFile(path.join(root, "CLAUDE.md"), "# Mine\n");
     const project = await requireProjectAt(root);
 
-    const inspection = await inspectProjectFiles(project, installation, adapters.claude);
+    const inspection = await inspectProjectFiles(project, installation, [adapters.claude]);
 
     expect(inspection.report.edited).toEqual(["CLAUDE.md"]);
   });
@@ -80,7 +80,7 @@ describe("inspectProjectFiles", () => {
     await writeFile(legacyTool, "// old");
     const project = await requireProjectAt(root);
 
-    const inspection = await inspectProjectFiles(project, installation, adapters.claude);
+    const inspection = await inspectProjectFiles(project, installation, [adapters.claude]);
 
     expect(inspection.report.removed).toEqual([LEGACY_TOOL_FILE]);
   });
@@ -89,7 +89,7 @@ describe("inspectProjectFiles", () => {
     const project = await requireProjectAt(root);
     const outdated = { ...project, config: { ...project.config, harness: "0.1.0" } };
 
-    const inspection = await inspectProjectFiles(outdated, installation, adapters.claude);
+    const inspection = await inspectProjectFiles(outdated, installation, [adapters.claude]);
 
     expect({ version: inspection.configVersion, outdated: inspection.isHarnessOutdated }).toEqual({
       version: "0.1.0",

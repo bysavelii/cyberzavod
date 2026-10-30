@@ -3,7 +3,7 @@
 // not.
 
 /** JSON output format version; not to be confused with the CLI and harness version. */
-export const JSON_OUTPUT_SCHEMA_VERSION = 1;
+export const JSON_OUTPUT_SCHEMA_VERSION = 2;
 
 /**
  * Prints a command's JSON document: format version, command name, then the command's fields.

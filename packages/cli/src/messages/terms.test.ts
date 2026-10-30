@@ -48,25 +48,17 @@ describe("CLI_MESSAGES", () => {
     ]);
   });
 
-  it("итог disconnect про CLAUDE.md есть только у агента со своим файлом правил", () => {
+  it("подсказка disconnect называет собственный файл правил агента", () => {
     const { en } = CLI_MESSAGES;
 
-    const withFile = en.disconnect.done({
+    const hint = en.disconnect.agentRulesHint({
       rulesFile: "AGENTS.md",
       terms: CLAUDE_TERMS,
       agentRulesFile: "CLAUDE.md",
     });
-    const withoutFile = en.disconnect.done({
-      rulesFile: "AGENTS.md",
-      terms: CODEX_TERMS,
-      agentRulesFile: undefined,
-    });
 
-    expect(withFile).toBe(
-      "Done: Cyberzavod was removed from this project. Review and commit the changes.\nClaude Code reads CLAUDE.md: to keep your AGENTS.md rules in Claude Code, create CLAUDE.md with the single line @AGENTS.md.",
-    );
-    expect(withoutFile).toBe(
-      "Done: Cyberzavod was removed from this project. Review and commit the changes.",
+    expect(hint).toBe(
+      "Claude Code reads CLAUDE.md: to keep your AGENTS.md rules in Claude Code, create CLAUDE.md with the single line @AGENTS.md.",
     );
   });
 });

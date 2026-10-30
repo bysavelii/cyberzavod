@@ -99,9 +99,13 @@ export const ru: CliMessages = {
       ],
     },
     draft: {
-      usage: "draft [<сырой журнал сессии>]",
+      usage: "draft [--agent <агент>] [<сырой журнал сессии>]",
       summary: "собрать черновик записи из журнала сессии агента",
       parameters: [
+        {
+          name: "--agent <агент>",
+          description: "агент, чей это журнал; нужен, если подключено несколько",
+        },
         {
           name: "<сырой журнал сессии>",
           description: "путь к журналу; без него — самый свежий сырой журнал",
@@ -109,9 +113,13 @@ export const ru: CliMessages = {
       ],
     },
     publish: {
-      usage: "publish [--draft <черновик>] [--build <id сборки>]",
+      usage: "publish [--agent <агент>] [--draft <файл>] [--build <id сборки>]",
       summary: "опубликовать отредактированный черновик записями в журнал",
       parameters: [
+        {
+          name: "--agent <агент>",
+          description: "агент, чей это черновик; нужен, если подключено несколько",
+        },
         { name: "--draft", description: "путь к черновику; без него — самый свежий" },
         { name: "--build", description: "сборка черновика; без неё — все" },
       ],
@@ -333,13 +341,9 @@ export const ru: CliMessages = {
     confirm: "Продолжить? [Y/n]",
     cancelled: "Отменено: ничего не изменено.",
     needsConfirmation: `Ничего не изменено: спросить негде, терминала нет. Чтобы удалить без вопроса, запустите:\n  ${CLI_COMMAND} disconnect --yes`,
-    done: ({ rulesFile, terms, agentRulesFile }) => {
-      const removed = "Готово: Cyberzavod убран из проекта. Просмотрите и закоммитьте изменения.";
-
-      if (agentRulesFile === undefined) return removed;
-
-      return `${removed}\n${terms.product} читает ${agentRulesFile}: чтобы правила ${rulesFile} остались в ${terms.product}, создайте ${agentRulesFile} с одной строкой @${rulesFile}.`;
-    },
+    done: "Готово: Cyberzavod убран из проекта. Просмотрите и закоммитьте изменения.",
+    agentRulesHint: ({ rulesFile, terms, agentRulesFile }) =>
+      `${terms.product} читает ${agentRulesFile}: чтобы правила ${rulesFile} остались в ${terms.product}, создайте ${agentRulesFile} с одной строкой @${rulesFile}.`,
   },
   status: {
     recordTypes: { session: "сессии", decision: "решения", note: "заметки" },
@@ -398,12 +402,12 @@ export const ru: CliMessages = {
     unknownHook: (name) => `нет хука ${name}`,
     unknownAgent: ({ agent, supported }) =>
       `неизвестный агент «${agent}» в --agent: доступны ${supported}`,
-    agentDiffers: ({ configured, requested }) =>
-      `проект уже подключён к агенту ${configured}, а не ${requested}: сначала выполните ${CLI_COMMAND} disconnect, затем init --agent ${requested}`,
+    agentRequired: (agents) =>
+      `подключено несколько агентов (${agents}): назовите одного флагом --agent <агент>`,
+    agentNotConnected: ({ agent, agents }) =>
+      `агент ${agent} не подключён к проекту (подключены: ${agents}): добавит его ${CLI_COMMAND} init --agent ${agent}`,
     unsupportedAgent: ({ agent, supported }) =>
       `агент «${agent}» не поддерживается: доступны ${supported}`,
-    mixedAgents: ({ agents, file }) =>
-      `в ${file} указано несколько агентов (${agents}): проект ведёт один агент`,
     unknownCommand: (name) => `неизвестная команда «${name}»: все команды — ${CLI_COMMAND} --help`,
     unknownCommandWithSuggestion: ({ name, suggestion }) =>
       `неизвестная команда «${name}»: может быть, ${CLI_COMMAND} ${suggestion}? Все команды: ${CLI_COMMAND} --help`,

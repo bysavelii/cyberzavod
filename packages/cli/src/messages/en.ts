@@ -99,9 +99,13 @@ export const en: CliMessages = {
       ],
     },
     draft: {
-      usage: "draft [<raw session log>]",
+      usage: "draft [--agent <agent>] [<raw session log>]",
       summary: "build a recording draft from an agent session log",
       parameters: [
+        {
+          name: "--agent <agent>",
+          description: "agent whose log it is; needed when several are connected",
+        },
         {
           name: "<raw session log>",
           description: "path to the log; default — the newest raw log",
@@ -109,9 +113,13 @@ export const en: CliMessages = {
       ],
     },
     publish: {
-      usage: "publish [--draft <draft>] [--build <build id>]",
+      usage: "publish [--agent <agent>] [--draft <draft>] [--build <build id>]",
       summary: "publish the edited draft as records in the journal",
       parameters: [
+        {
+          name: "--agent <agent>",
+          description: "agent whose draft it is; needed when several are connected",
+        },
         { name: "--draft", description: "path to the draft; default — the newest one" },
         { name: "--build", description: "draft build to publish; default — all" },
       ],
@@ -333,14 +341,9 @@ export const en: CliMessages = {
     confirm: "Continue? [Y/n]",
     cancelled: "Cancelled: nothing was changed.",
     needsConfirmation: `Nothing was changed: there is no terminal to ask in. To remove without asking, run:\n  ${CLI_COMMAND} disconnect --yes`,
-    done: ({ rulesFile, terms, agentRulesFile }) => {
-      const removed =
-        "Done: Cyberzavod was removed from this project. Review and commit the changes.";
-
-      if (agentRulesFile === undefined) return removed;
-
-      return `${removed}\n${terms.product} reads ${agentRulesFile}: to keep your ${rulesFile} rules in ${terms.product}, create ${agentRulesFile} with the single line @${rulesFile}.`;
-    },
+    done: "Done: Cyberzavod was removed from this project. Review and commit the changes.",
+    agentRulesHint: ({ rulesFile, terms, agentRulesFile }) =>
+      `${terms.product} reads ${agentRulesFile}: to keep your ${rulesFile} rules in ${terms.product}, create ${agentRulesFile} with the single line @${rulesFile}.`,
   },
   status: {
     recordTypes: { session: "sessions", decision: "decisions", note: "notes" },
@@ -399,12 +402,12 @@ export const en: CliMessages = {
     unknownHook: (name) => `no hook named ${name}`,
     unknownAgent: ({ agent, supported }) =>
       `unknown agent ${agent} in --agent: supported agents are ${supported}`,
-    agentDiffers: ({ configured, requested }) =>
-      `this project is already set up for ${configured}, not ${requested}: run ${CLI_COMMAND} disconnect first, then init --agent ${requested}`,
+    agentRequired: (agents) =>
+      `several agents are connected (${agents}): name one with --agent <agent>`,
+    agentNotConnected: ({ agent, agents }) =>
+      `the agent ${agent} is not connected to this project (connected: ${agents}): ${CLI_COMMAND} init --agent ${agent} adds it`,
     unsupportedAgent: ({ agent, supported }) =>
       `the agent “${agent}” is not supported: available are ${supported}`,
-    mixedAgents: ({ agents, file }) =>
-      `${file} names several agents (${agents}): a project is driven by one agent`,
     unknownCommand: (name) => `unknown command “${name}”: all commands — ${CLI_COMMAND} --help`,
     unknownCommandWithSuggestion: ({ name, suggestion }) =>
       `unknown command “${name}”: did you mean ${CLI_COMMAND} ${suggestion}? All commands: ${CLI_COMMAND} --help`,

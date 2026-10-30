@@ -173,16 +173,6 @@ describe("runCli", () => {
       expect(await exists(path.join(root, ".cyberzavod"))).toBe(false);
       expect(printedLog()).toContain(CLI_MESSAGES.en.init.cancelled);
     });
-
-    it("в проекте, подключённом к Codex, не принимает --agent claude", async () => {
-      await initCodex();
-      vi.mocked(console.error).mockClear();
-
-      const code = await runCli(["init", "--yes", "--agent", "claude"], root, env);
-
-      expect(code).toBe(1);
-      expect(printedError()).toContain("already set up for codex, not claude");
-    });
   });
 
   describe("sync", () => {

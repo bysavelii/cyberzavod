@@ -14,7 +14,7 @@ import {
   type UserConfigChange,
   type UserConfigPlan,
 } from "../agents/agent-adapter.ts";
-import { adapterFor, agentNamed } from "../agents/host-agent.ts";
+import { agentNamed, connectedAdaptersOf } from "../agents/host-agent.ts";
 import type { Adapters } from "../agents/registry.ts";
 import type { Confirmation } from "../confirmation.ts";
 import { detectProject } from "../detect.ts";
@@ -229,20 +229,11 @@ function requestedAgentOf(agent: string | undefined): AgentName | undefined {
 
 // `init` does not change an already connected project; it says whether it is fine and what to do
 // next.
-async function reportConnected(
-  root: string,
-  options: InitOptions,
-  requested: AgentName | undefined,
-): Promise<boolean> {
+async function reportConnected(root: string, options: InitOptions): Promise<boolean> {
   const { installation, messages, adapters } = options;
   const project = await requireProjectAt(root);
-  const adapter = adapterFor(project.config, adapters);
-
-  if (requested !== undefined && requested !== adapter.name) {
-    throw new CommandError((m) => m.errors.agentDiffers({ configured: adapter.name, requested }));
-  }
-
-  const { report, isHarnessOutdated } = await inspectProjectFiles(project, installation, adapter);
+  const connected = connectedAdaptersOf(project.config, adapters);
+  const { report, isHarnessOutdated } = await inspectProjectFiles(project, installation, connected);
   const status = filesStatusOf(report);
   const isCurrent = status === "current" && !isHarnessOutdated;
 
@@ -287,7 +278,7 @@ export async function initProject(root: string, options: InitOptions): Promise<b
   const requested = requestedAgentOf(options.agent);
   const isConnected = (await readProjectConfig(root)) !== undefined;
 
-  if (isConnected) return reportConnected(root, options, requested);
+  if (isConnected) return reportConnected(root, options);
 
   const detected = await detectProject(root);
   const adapter = adapters[requested ?? DEFAULT_AGENT_NAME];

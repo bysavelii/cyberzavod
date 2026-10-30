@@ -255,15 +255,13 @@ export interface DisconnectMessages {
   cancelled: string;
   /** Run without a terminal and without `--yes`: there is nowhere to ask. */
   needsConfirmation: string;
+  /** The result. */
+  done: string;
   /**
-   * The result. `agentRulesFile` is the agent's own rules file that the agent reads instead of
-   * AGENTS.md, or undefined if it reads AGENTS.md itself.
+   * For an agent that reads its own rules file `agentRulesFile` instead of AGENTS.md: how to keep
+   * the project rules in it.
    */
-  done(params: {
-    rulesFile: string;
-    terms: AgentTerms;
-    agentRulesFile: string | undefined;
-  }): string;
+  agentRulesHint(params: { rulesFile: string; terms: AgentTerms; agentRulesFile: string }): string;
 }
 
 /** `status` command texts. */
@@ -340,10 +338,10 @@ export interface ErrorMessages {
   unsupportedAgent(params: { agent: string; supported: string }): string;
   /** `init --agent` names an agent the CLI cannot drive. */
   unknownAgent(params: { agent: string; supported: string }): string;
-  /** `init --agent` asks for another agent than the connected project has. */
-  agentDiffers(params: { configured: string; requested: string }): string;
-  /** The stages of the config name several agents; `agents` lists them. */
-  mixedAgents(params: { agents: string; file: string }): string;
+  /** The command works with one agent, several are connected and none is named; `agents` lists them. */
+  agentRequired(agents: string): string;
+  /** `--agent` names an agent the project is not connected to; `agents` lists the connected ones. */
+  agentNotConnected(params: { agent: string; agents: string }): string;
   unknownCommand(name: string): string;
   unknownCommandWithSuggestion(params: { name: string; suggestion: string }): string;
   languageFlagWithoutValue: string;

@@ -3,7 +3,6 @@
 import path from "node:path";
 import {
   DEFAULT_MODEL,
-  type AgentConfig,
   type Harness,
   type JournalRecord,
   type ProjectConfig,
@@ -12,39 +11,47 @@ import {
   type StageGuide,
 } from "@cyberzavod/core";
 import { DirectoryRecordStore, RECORD_COLLECTIONS, workflowOf } from "@cyberzavod/storage";
-import { firstAgentNameOf } from "../agents/host-agent.ts";
+import { agentNamesOf } from "../agents/host-agent.ts";
 import type { CommandError } from "../errors.ts";
 import { HARNESS_VERSION, type Installation } from "../installation/installation.ts";
 import { printJson } from "../json-output.ts";
 import type { CliMessages } from "../messages/cli-messages.ts";
 import { requireProjectAt, type ProjectAt } from "./project.ts";
 
+const PERFORMER_SEPARATOR = ", ";
+
 interface StagePerformer {
   agent: string;
-  settings: AgentConfig;
+  model: string;
 }
 
-// A stage with no settings in the config is run by the agent that drives the project. Status is
-// printed even for a config that names unusable agents: `doctor` reports those.
-function stagePerformerOf(config: ProjectConfig, stage: Stage): StagePerformer {
-  const agent = firstAgentNameOf(config);
-
-  return { agent, settings: config.agents[agent]?.[stage] ?? {} };
+// Every connected agent performs the stages with a role; a stage with no settings in the config
+// runs on the default model. Status is printed even for a config that names unusable agents:
+// `doctor` reports those.
+function performersOf(config: ProjectConfig, stage: Stage): StagePerformer[] {
+  return agentNamesOf(config).map((agent) => ({
+    agent,
+    model: config.agents[agent]?.[stage]?.model ?? DEFAULT_MODEL,
+  }));
 }
 
-function performerOf(guide: StageGuide, performer: StagePerformer, messages: CliMessages): string {
+function performersLine(
+  guide: StageGuide,
+  performers: readonly StagePerformer[],
+  messages: CliMessages,
+): string {
   if (guide.role === undefined) return messages.status.foreman;
 
-  return `${performer.agent} · ${performer.settings.model ?? DEFAULT_MODEL}`;
+  return performers.map(({ agent, model }) => `${agent} · ${model}`).join(PERFORMER_SEPARATOR);
 }
 
 function processLines(project: ProjectAt, harness: Harness, messages: CliMessages): string[] {
   const workflow = workflowOf(harness, project.config.workflow);
   const stages = workflow.stages.map((stage) => {
     const guide = harness.stages[stage];
-    const performer = performerOf(guide, stagePerformerOf(project.config, stage), messages);
+    const performers = performersOf(project.config, stage);
 
-    return `  ${guide.title}: ${performer}`;
+    return `  ${guide.title}: ${performersLine(guide, performers, messages)}`;
   });
 
   return [messages.status.workflow(workflow.name), ...stages];
@@ -88,14 +95,12 @@ function stagesOf(project: ProjectAt, harness: Harness) {
   const workflow = workflowOf(harness, project.config.workflow);
   const stages = workflow.stages.map((stage) => {
     const guide = harness.stages[stage];
-    const performer = stagePerformerOf(project.config, stage);
     const isLead = guide.role === undefined;
 
     return {
       stage,
       title: guide.title,
-      agent: isLead ? null : performer.agent,
-      model: isLead ? null : (performer.settings.model ?? DEFAULT_MODEL),
+      performers: isLead ? [] : performersOf(project.config, stage),
     };
   });
 

@@ -2,7 +2,7 @@
 // local server on the loopback address; nothing in the project or the journal is written.
 
 import type { InterfaceLanguage } from "@cyberzavod/core";
-import { adapterFor } from "../agents/host-agent.ts";
+import { connectedAdaptersOf } from "../agents/host-agent.ts";
 import type { Adapters } from "../agents/registry.ts";
 import type { CommandError } from "../errors.ts";
 import { HARNESS_VERSION } from "../installation/installation.ts";
@@ -50,7 +50,7 @@ async function openOrExplain(address: string, { open, messages }: ViewOptions): 
 export async function startView(directory: string, options: ViewOptions): Promise<ViewerServer> {
   const { messages, language, adapters, env, locate, isOpening } = options;
   const project = await requireProjectAt(directory);
-  const adapter = adapterFor(project.config, adapters);
+  const connected = connectedAdaptersOf(project.config, adapters);
   const spec = viewerSpecOf(env, HARNESS_VERSION);
 
   console.log(messages.view.preparing(spec));
@@ -58,7 +58,7 @@ export async function startView(directory: string, options: ViewOptions): Promis
   const files = await staticFilesOf(locate(spec, project.root));
   const server = await startViewerServer({
     files,
-    recordings: () => localRecordingsOf(project, adapter, language),
+    recordings: () => localRecordingsOf(project, connected, language),
     onFailure: (err) => {
       const reason = err instanceof Error ? err.message : String(err);
 

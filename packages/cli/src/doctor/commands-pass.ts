@@ -18,11 +18,11 @@ function failureOf(command: string, run: CommandRun, doctor: DoctorMessages): st
 /** Each of the `verification.commands` exits with code 0. */
 export const commandsPassCheck: ProjectCheck = {
   id: "commands",
-  run: async ({ project, messages, adapter, runCommand }) => {
+  run: async ({ project, messages, adapters: [{ terms }], runCommand }) => {
     const { commands } = messages.doctor;
     const configured = project.config.verification.commands;
 
-    if (configured.length === 0) return noCommandsResult(messages, adapter.terms);
+    if (configured.length === 0) return noCommandsResult(messages, terms);
 
     const runs = configured.map((command) => ({
       command,

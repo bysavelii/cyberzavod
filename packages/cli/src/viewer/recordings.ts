@@ -1,4 +1,4 @@
-// What the factory floor lists: the sessions of the project journal and the builds of the agent's
+// What the factory floor lists: the sessions of the project journal and the builds of the agents'
 // drafts.
 
 import type { InterfaceLanguage, JournalRecord, SessionRecord } from "@cyberzavod/core";
@@ -20,19 +20,23 @@ function isSession(record: JournalRecord): record is SessionRecord {
  * Reads the journal and the drafts afresh. A build whose id is already a recording is left out of
  * the drafts: it would be on the list twice.
  * @param {ProjectAt} project The connected project.
- * @param {AgentAdapter} adapter The project's agent: it knows where the drafts are.
+ * @param {readonly AgentAdapter[]} adapters The project's agents: each knows where its drafts are.
  * @param {InterfaceLanguage} language Language of the builds' fallback titles.
- * @returns {Promise<LocalRecordings>} Sessions from `sessions/` and builds of the drafts.
+ * @returns {Promise<LocalRecordings>} Sessions from `sessions/` and builds of all the agents' drafts.
  * @throws {JournalError} If a record file in the journal is corrupt.
  */
 export async function localRecordingsOf(
   project: ProjectAt,
-  adapter: AgentAdapter,
+  adapters: readonly AgentAdapter[],
   language: InterfaceLanguage,
 ): Promise<LocalRecordings> {
   const records = await new DirectoryRecordStore(project.journal).list();
   const published = records.filter(isSession);
-  const builds = await adapter.previewDrafts({ projectDirectory: project.root, language });
+  const request = { projectDirectory: project.root, language };
+  const buildsByAgent = await Promise.all(
+    adapters.map((adapter) => adapter.previewDrafts(request)),
+  );
+  const builds = buildsByAgent.flat();
   const publishedIds = new Set(published.map((record) => record.id));
   const drafts = builds.filter((build) => !publishedIds.has(build.id));
 

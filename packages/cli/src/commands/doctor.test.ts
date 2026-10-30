@@ -24,11 +24,11 @@ async function optionsWith(
 
   return {
     machine: patch.machine ?? machine(),
-    projectChecks: projectChecksWith(patch.commandsCheck ?? commandsFoundCheck, adapters.claude),
+    projectChecks: projectChecksWith(patch.commandsCheck ?? commandsFoundCheck, [adapters.claude]),
     projectTools: { isProgramAvailable: async () => true, runCommand },
     installation: await readInstallation(),
     messages,
-    adapter: adapters.claude,
+    adapters: [adapters.claude],
     language: "en",
     isJson: patch.isJson ?? false,
   };
@@ -130,7 +130,7 @@ describe("runDoctor", () => {
     });
   });
 
-  it("со смешанными агентами в конфиге печатает ✗ конфига и пропускает проверки проекта", async () => {
+  it("с неизвестным агентом среди подключённых печатает ✗ конфига и пропускает проверки проекта", async () => {
     const project = await connectedProject();
     const agents = {
       claude: { implementation: { provider: "anthropic" } },
@@ -149,7 +149,7 @@ describe("runDoctor", () => {
       isHealthy: false,
       lines: [
         "✓ gallery: signed in",
-        "✗ the agents in the project config cannot be used: .cyberzavod/project.json names several agents (claude, gemini): a project is driven by one agent",
+        "✗ the agents in the project config cannot be used: the agent “gemini” is not supported: available are claude, codex",
         "    How to fix: edit agents in .cyberzavod/project.json",
         "Problems: 1.",
       ],
@@ -249,7 +249,7 @@ describe("runDoctor", () => {
       ids: document.checks.map((check) => check.id),
     }).toEqual({
       isHealthy: true,
-      schemaVersion: 1,
+      schemaVersion: 2,
       command: "doctor",
       status: "ok",
       ids: [

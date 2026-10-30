@@ -290,7 +290,7 @@ function checkStatus(workspace: Workspace): void {
 
   const status = jsonOf(run, "status --json");
 
-  assert.equal(status.schemaVersion, 1);
+  assert.equal(status.schemaVersion, 2);
   assert.equal(status.command, "status");
   assert.equal(status.status, "connected");
   step("status, status --json");
@@ -304,7 +304,7 @@ function checkDoctor(workspace: Workspace, ids: readonly string[]): void {
   const checks = doctor.checks as { id: string; status: string }[];
   const statusOf = (id: string) => checks.find((check) => check.id === id)?.status;
 
-  assert.equal(doctor.schemaVersion, 1);
+  assert.equal(doctor.schemaVersion, 2);
 
   for (const id of ids) {
     assert.equal(statusOf(id), "passed", `doctor: check ${id}\n${run.stdout}`);

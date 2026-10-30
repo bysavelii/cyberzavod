@@ -51,7 +51,7 @@ describe("configCheck", () => {
     expect(outcome.result).toHaveProperty("problem", expect.stringContaining("the project config"));
   });
 
-  it("при нескольких агентах в конфиге не находит проект и зовёт исправить agents", async () => {
+  it("с неизвестным агентом среди подключённых не находит проект и зовёт исправить agents", async () => {
     const project = await connectedProject();
     const agents = {
       claude: { implementation: { provider: "anthropic" } },
@@ -69,7 +69,7 @@ describe("configCheck", () => {
       result: {
         status: "failed",
         problem:
-          "the agents in the project config cannot be used: .cyberzavod/project.json names several agents (claude, gemini): a project is driven by one agent",
+          "the agents in the project config cannot be used: the agent “gemini” is not supported: available are claude, codex",
         fix: `edit agents in ${PROJECT_CONFIG_FILE}`,
       },
       project: undefined,
