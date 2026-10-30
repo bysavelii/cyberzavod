@@ -29,7 +29,7 @@ export function validConfig(patch: Partial<ProjectConfig> = {}): ProjectConfig {
     harness: "0.3.0",
     workflow: "default",
     journal: "journal",
-    agents: { planning: { provider: "anthropic", agent: "claude", model: "default" } },
+    agents: { claude: { planning: { provider: "anthropic", model: "default" } } },
     verification: { commands: ["pnpm test"], paths: ["src"] },
     ...patch,
   };

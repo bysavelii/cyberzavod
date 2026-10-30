@@ -590,7 +590,7 @@ describe("runCli", () => {
 
   it("sync с неизвестным агентом в конфиге выходит с 1 и называет поддерживаемых", async () => {
     await initialized();
-    await rewriteAgents({ implementation: { provider: "google", agent: "gemini" } });
+    await rewriteAgents({ gemini: { implementation: { provider: "google" } } });
 
     const code = await runCli(["sync"], root, NO_LOCALE);
 
@@ -603,8 +603,8 @@ describe("runCli", () => {
   it("sync со смешанными агентами в конфиге выходит с 1 и называет агентов", async () => {
     await initialized();
     await rewriteAgents({
-      implementation: { provider: "anthropic", agent: "claude" },
-      review: { provider: "google", agent: "gemini" },
+      claude: { implementation: { provider: "anthropic" } },
+      gemini: { review: { provider: "google" } },
     });
 
     const code = await runCli(["sync"], root, NO_LOCALE);

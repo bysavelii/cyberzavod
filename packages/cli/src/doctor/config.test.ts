@@ -54,13 +54,13 @@ describe("configCheck", () => {
   it("при нескольких агентах в конфиге не находит проект и зовёт исправить agents", async () => {
     const project = await connectedProject();
     const agents = {
-      implementation: { provider: "anthropic", agent: "claude" },
-      review: { provider: "google", agent: "gemini" },
+      claude: { implementation: { provider: "anthropic" } },
+      gemini: { review: { provider: "google" } },
     };
 
     await writeFile(
       path.join(project.root, PROJECT_CONFIG_FILE),
-      JSON.stringify({ ...project.config, agents }),
+      JSON.stringify({ ...project.config, schemaVersion: 2, agents }),
     );
 
     const outcome = await configCheck(project.root, messages);

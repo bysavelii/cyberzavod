@@ -40,6 +40,7 @@ export {
   parseProjectConfig,
   type ProjectConfig,
   type StackInfo,
+  type StageAgents,
   type VerificationConfig,
 } from "./project-config.ts";
 export {

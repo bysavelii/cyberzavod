@@ -208,12 +208,27 @@ describe("codexFiles", () => {
     const project = codexProject();
     const configured: CodexProject = {
       ...project,
-      config: { ...project.config, agents: { planning: { model: "gpt-custom" } } },
+      config: { ...project.config, agents: { codex: { planning: { model: "gpt-custom" } } } },
     };
 
     const role = parse(fileOf(configured, ".codex/agents/analyst.toml"));
 
     expect(role.model).toBe("gpt-custom");
+  });
+
+  it("не читает настройки этапов других агентов проекта", () => {
+    const project = codexProject();
+    const shared: CodexProject = {
+      ...project,
+      config: {
+        ...project.config,
+        agents: { claude: { planning: { provider: "anthropic", model: "opus" } } },
+      },
+    };
+
+    const role = parse(fileOf(shared, ".codex/agents/analyst.toml"));
+
+    expect(role.model).toBe("gpt-6-astra");
   });
 
   it("скилл feature несёт таблицу этапов, правила ведущего и способ вызова станции", () => {
@@ -287,13 +302,13 @@ describe("codexFiles", () => {
     expect(policy).toContain("allow_implicit_invocation: false");
   });
 
-  it("отвергает этап, отданный другому агенту", () => {
+  it("отвергает этап, отданный другому провайдеру", () => {
     const project = codexProject();
     const other: CodexProject = {
       ...project,
       config: {
         ...project.config,
-        agents: { planning: { provider: "anthropic", agent: "claude" } },
+        agents: { codex: { planning: { provider: "anthropic" } } },
       },
     };
 

@@ -19,23 +19,30 @@ import { printJson } from "../json-output.ts";
 import type { CliMessages } from "../messages/cli-messages.ts";
 import { requireProjectAt, type ProjectAt } from "./project.ts";
 
-// A stage with no agent in the config is run by the agent that drives the project. Status is
-// printed even for a config that names unusable agents: `doctor` reports those.
-function stageAgentOf(config: ProjectConfig, stage: Stage): AgentConfig {
-  return { agent: firstAgentNameOf(config), ...config.agents[stage] };
+interface StagePerformer {
+  agent: string;
+  settings: AgentConfig;
 }
 
-function performerOf(guide: StageGuide, agent: AgentConfig, messages: CliMessages): string {
+// A stage with no settings in the config is run by the agent that drives the project. Status is
+// printed even for a config that names unusable agents: `doctor` reports those.
+function stagePerformerOf(config: ProjectConfig, stage: Stage): StagePerformer {
+  const agent = firstAgentNameOf(config);
+
+  return { agent, settings: config.agents[agent]?.[stage] ?? {} };
+}
+
+function performerOf(guide: StageGuide, performer: StagePerformer, messages: CliMessages): string {
   if (guide.role === undefined) return messages.status.foreman;
 
-  return `${agent.agent} · ${agent.model ?? DEFAULT_MODEL}`;
+  return `${performer.agent} · ${performer.settings.model ?? DEFAULT_MODEL}`;
 }
 
 function processLines(project: ProjectAt, harness: Harness, messages: CliMessages): string[] {
   const workflow = workflowOf(harness, project.config.workflow);
   const stages = workflow.stages.map((stage) => {
     const guide = harness.stages[stage];
-    const performer = performerOf(guide, stageAgentOf(project.config, stage), messages);
+    const performer = performerOf(guide, stagePerformerOf(project.config, stage), messages);
 
     return `  ${guide.title}: ${performer}`;
   });
@@ -81,14 +88,14 @@ function stagesOf(project: ProjectAt, harness: Harness) {
   const workflow = workflowOf(harness, project.config.workflow);
   const stages = workflow.stages.map((stage) => {
     const guide = harness.stages[stage];
-    const agent = stageAgentOf(project.config, stage);
+    const performer = stagePerformerOf(project.config, stage);
     const isLead = guide.role === undefined;
 
     return {
       stage,
       title: guide.title,
-      agent: isLead ? null : agent.agent,
-      model: isLead ? null : (agent.model ?? DEFAULT_MODEL),
+      agent: isLead ? null : performer.agent,
+      model: isLead ? null : (performer.settings.model ?? DEFAULT_MODEL),
     };
   });
 

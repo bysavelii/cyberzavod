@@ -51,7 +51,7 @@ function approvedHooksIn(text: string): number {
   return text.match(/^trusted_hash = /gm)?.length ?? 0;
 }
 
-async function projectConfig(): Promise<{ agents: Record<string, object> }> {
+async function projectConfig(): Promise<{ agents: Record<string, Record<string, object>> }> {
   return JSON.parse(await readFile(path.join(root, PROJECT_CONFIG_FILE), "utf8"));
 }
 
@@ -100,9 +100,8 @@ describe("runCli", () => {
       const code = await initCodex();
 
       expect(code).toBe(0);
-      expect((await projectConfig()).agents.implementation).toMatchObject({
+      expect((await projectConfig()).agents.codex?.implementation).toMatchObject({
         provider: "openai",
-        agent: "codex",
       });
       expect(await exists(path.join(root, ".codex/config.toml"))).toBe(true);
       expect(await exists(path.join(root, ".agents/skills/feature/SKILL.md"))).toBe(true);

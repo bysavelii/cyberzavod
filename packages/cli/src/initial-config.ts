@@ -4,10 +4,10 @@
 import path from "node:path";
 import {
   DEFAULT_MODEL,
-  type AgentConfig,
   type Harness,
   type ProjectConfig,
   type Stage,
+  type StageAgents,
 } from "@cyberzavod/core";
 import { DEFAULT_JOURNAL, workflowOf } from "@cyberzavod/storage";
 import type { AgentIdentity } from "./agents/agent-adapter.ts";
@@ -87,26 +87,26 @@ function journalOption(value: string): string {
   return relative;
 }
 
-// Every workflow stage that has a role in the harness gets an agent.
-function agentsOf(
+// Every workflow stage that has a role in the harness gets the agent's settings.
+function stageAgentsOf(
   harness: Harness,
   stages: readonly Stage[],
   identity: AgentIdentity,
-): Partial<Record<Stage, AgentConfig>> {
-  const agents: Partial<Record<Stage, AgentConfig>> = {};
+): StageAgents {
+  const stageAgents: StageAgents = {};
 
   for (const stage of stages) {
     if (harness.stages[stage].role === undefined) continue;
 
-    agents[stage] = { ...identity, model: DEFAULT_MODEL };
+    stageAgents[stage] = { provider: identity.provider, model: DEFAULT_MODEL };
   }
 
-  return agents;
+  return stageAgents;
 }
 
 /**
  * Builds the project config from the findings: id, checks and stack from the project, the
- * `default` workflow and the agent for each stage with a role. The human's flags override findings.
+ * `default` workflow and the agent's settings for each stage with a role. The human's flags override findings.
  * @param {InitialConfigSource} source Project findings, harness, flags and the agent.
  * @returns {ProjectConfig} Project config with this CLI's harness version.
  * @throws {CommandError} If a flag is empty or `--journal` is an absolute path.
@@ -128,7 +128,7 @@ export function initialConfigOf(source: InitialConfigSource): ProjectConfig {
     harness: HARNESS_VERSION,
     workflow: workflow.name,
     journal,
-    agents: agentsOf(harness, workflow.stages, identity),
+    agents: { [identity.agent]: stageAgentsOf(harness, workflow.stages, identity) },
     verification: { commands, paths: [] },
     stack: stackOf(detected),
   };

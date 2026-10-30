@@ -41,23 +41,19 @@ export class GenerateError extends ClaudeError {}
 /**
  * Claude model for a stage.
  * @param {Stage} stage Stage.
- * @param {AgentConfig | undefined} agent Stage agent from the project config.
+ * @param {AgentConfig | undefined} agent This agent's settings for the stage from the project config.
  * @returns {string} The model from the config, or the adapter's default model for the stage.
- * @throws {GenerateError} If the stage is assigned to another provider or agent.
+ * @throws {GenerateError} If the stage is assigned to another provider.
  */
 export function claudeModelOf(stage: Stage, agent: AgentConfig | undefined): string {
-  const {
-    provider = CLAUDE_PROVIDER,
-    agent: name = CLAUDE_AGENT,
-    model = DEFAULT_MODEL,
-  } = agent ?? {};
+  const { provider = CLAUDE_PROVIDER, model = DEFAULT_MODEL } = agent ?? {};
 
-  if (provider !== CLAUDE_PROVIDER || name !== CLAUDE_AGENT) {
+  if (provider !== CLAUDE_PROVIDER) {
     throw new GenerateError((messages) =>
       messages.errors.unsupportedAgent({
         stage,
-        requested: `${provider}/${name}`,
-        supported: `${CLAUDE_PROVIDER}/${CLAUDE_AGENT}`,
+        requested: provider,
+        supported: CLAUDE_PROVIDER,
       }),
     );
   }

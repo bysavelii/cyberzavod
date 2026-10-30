@@ -48,10 +48,12 @@ describe("initialConfigOf", () => {
       journal: ".cyberzavod/journal",
       commands: ["pnpm run lint", "pnpm run test"],
       agents: {
-        planning: { provider: "anthropic", agent: "claude", model: "default" },
-        implementation: { provider: "anthropic", agent: "claude", model: "default" },
-        review: { provider: "anthropic", agent: "claude", model: "default" },
-        verification: { provider: "anthropic", agent: "claude", model: "default" },
+        claude: {
+          planning: { provider: "anthropic", model: "default" },
+          implementation: { provider: "anthropic", model: "default" },
+          review: { provider: "anthropic", model: "default" },
+          verification: { provider: "anthropic", model: "default" },
+        },
       },
       stack: { languages: ["typescript"], frameworks: ["react"], packageManager: "pnpm" },
     });

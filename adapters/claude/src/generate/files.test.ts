@@ -53,7 +53,7 @@ function claudeProject(): ClaudeProject {
       harness: "0.3.0",
       workflow: "default",
       journal: "journal",
-      agents: { implementation: { model: "opus" } },
+      agents: { claude: { implementation: { model: "opus" } } },
       verification: { commands: ["pnpm test"], paths: [] },
     },
     harness: harness(),
@@ -97,6 +97,21 @@ describe("claudeFiles", () => {
       ".claude/skills/publish-recording/SKILL.md",
       ".claude/agents/recording-editor.md",
     ]);
+  });
+
+  it("не читает настройки этапов других агентов проекта", () => {
+    const project = claudeProject();
+    const shared: ClaudeProject = {
+      ...project,
+      config: {
+        ...project.config,
+        agents: { codex: { implementation: { provider: "openai", model: "gpt-custom" } } },
+      },
+    };
+
+    const content = fileOf(shared, ".claude/agents/coder.md");
+
+    expect(content).toContain("model: sonnet");
   });
 
   it("корневой CLAUDE.md несёт отметку, маршрут, проверки, принципы и импорт AGENTS.md", () => {

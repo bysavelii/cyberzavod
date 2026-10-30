@@ -30,6 +30,7 @@ import {
   claudeEffortOf,
   claudeModelOf,
   claudeToolsOf,
+  CLAUDE_AGENT,
   ESCALATION_MODEL,
   type GenerateError,
 } from "./claude.ts";
@@ -141,7 +142,7 @@ function roleAgents(project: ClaudeProject): GeneratedFile[] {
   return guidesOf(project).flatMap((guide) => {
     if (guide.role === undefined) return [];
 
-    const model = claudeModelOf(guide.stage, project.config.agents[guide.stage]);
+    const model = claudeModelOf(guide.stage, project.config.agents[CLAUDE_AGENT]?.[guide.stage]);
 
     return [agentFile({ guide, role: guide.role, model, principles })];
   });
@@ -169,7 +170,7 @@ function featureFrontmatter(project: ClaudeProject, guides: readonly StageGuide[
 function featureSkill(project: ClaudeProject): GeneratedFile {
   const guides = guidesOf(project);
   const modelOf = (guide: StageGuide) =>
-    claudeModelOf(guide.stage, project.config.agents[guide.stage]);
+    claudeModelOf(guide.stage, project.config.agents[CLAUDE_AGENT]?.[guide.stage]);
   const content = [
     featureFrontmatter(project, guides),
     "# A task through the workflow",

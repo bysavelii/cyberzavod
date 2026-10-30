@@ -1,4 +1,4 @@
-// Which agent drives the project: the one named in the stage agents of its config.
+// Which agent drives the project: the one connected in the agents of its config.
 
 import type { ProjectConfig } from "@cyberzavod/core";
 import {
@@ -34,20 +34,16 @@ export function agentNamed(name: string): AgentName {
 }
 
 /**
- * Agents the stages of the config name, in order of appearance without repeats.
+ * Agents connected to the project, in order of connection.
  * @param {ProjectConfig} config Project config.
- * @returns {string[]} Agent names; empty if no stage names an agent.
+ * @returns {string[]} Agent names; empty if no agent is connected.
  */
 export function namedAgentsOf(config: ProjectConfig): string[] {
-  const names = Object.values(config.agents).flatMap(({ agent }) =>
-    agent === undefined ? [] : [agent],
-  );
-
-  return [...new Set(names)];
+  return Object.keys(config.agents);
 }
 
 /**
- * The first agent the config names, or the default one: for texts that must be printed even for a
+ * The first agent connected in the config, or the default one: for texts that must be printed even for a
  * config `hostAgentOf` rejects.
  * @param {ProjectConfig} config Project config.
  * @returns {string} Agent name, supported or not.

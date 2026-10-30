@@ -1,12 +1,6 @@
 import { DEFAULT_MODEL } from "@cyberzavod/core";
 import { describe, expect, it } from "vitest";
-import {
-  CODEX_AGENT,
-  CODEX_PROVIDER,
-  CodexGenerateError,
-  codexEffortOf,
-  codexModelOf,
-} from "./codex.ts";
+import { CODEX_PROVIDER, CodexGenerateError, codexEffortOf, codexModelOf } from "./codex.ts";
 import { CODEX_MESSAGES } from "../messages/catalog.ts";
 
 describe("codexModelOf", () => {
@@ -36,12 +30,12 @@ describe("codexModelOf", () => {
     expect(model).toBe("gpt-6-astra");
   });
 
-  it("отклоняет этап, отданный другому агенту, с понятным текстом", () => {
-    const act = () => codexModelOf("review", { provider: "anthropic", agent: "claude" });
+  it("отклоняет этап, отданный другому провайдеру, с понятным текстом", () => {
+    const act = () => codexModelOf("review", { provider: "anthropic" });
 
     expect(act).toThrow(CodexGenerateError);
     expect(act).toThrow(
-      `stage review: anthropic/claude is not supported by the Codex adapter, it runs only ${CODEX_PROVIDER}/${CODEX_AGENT}`,
+      `stage review: anthropic is not supported by the Codex adapter, it runs only ${CODEX_PROVIDER}`,
     );
   });
 
@@ -49,7 +43,7 @@ describe("codexModelOf", () => {
     let error: unknown;
 
     try {
-      codexModelOf("review", { agent: "claude" });
+      codexModelOf("review", { provider: "anthropic" });
     } catch (err) {
       error = err;
     }

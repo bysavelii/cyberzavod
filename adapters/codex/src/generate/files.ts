@@ -29,6 +29,7 @@ import {
 } from "@cyberzavod/core";
 import {
   codexEffortOf,
+  CODEX_AGENT,
   codexModelOf,
   ESCALATION_MODEL,
   RECORDING_EDITOR_EFFORT,
@@ -114,7 +115,7 @@ function configFile(project: CodexProject): GeneratedFile {
 }
 
 function roleFile(project: CodexProject, guide: StageGuide, role: StageRole): GeneratedFile {
-  const model = codexModelOf(guide.stage, project.config.agents[guide.stage]);
+  const model = codexModelOf(guide.stage, project.config.agents[CODEX_AGENT]?.[guide.stage]);
   const principles = rolePrinciples(project.harness);
   const instructions = [workingRules(project), ...principles, guide.body].join("\n\n");
   const description = `${guide.description} The "${guide.title}" stage of $feature.`;
@@ -171,7 +172,7 @@ function stageCallText(project: CodexProject): string {
 function featureSkill(project: CodexProject): GeneratedFile {
   const guides = guidesOf(project);
   const modelOf = (guide: StageGuide) =>
-    codexModelOf(guide.stage, project.config.agents[guide.stage]);
+    codexModelOf(guide.stage, project.config.agents[CODEX_AGENT]?.[guide.stage]);
   const content = [
     featureFrontmatter(project, guides),
     "# A task through the workflow",

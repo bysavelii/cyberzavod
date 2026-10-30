@@ -49,23 +49,19 @@ export class CodexGenerateError extends CodexError {}
 /**
  * Codex model for a stage.
  * @param {Stage} stage Stage.
- * @param {AgentConfig | undefined} agent Stage agent from the project config.
+ * @param {AgentConfig | undefined} agent This agent's settings for the stage from the project config.
  * @returns {string} The model from the config, or the adapter's default model for the stage.
- * @throws {CodexGenerateError} If the stage is assigned to another provider or agent.
+ * @throws {CodexGenerateError} If the stage is assigned to another provider.
  */
 export function codexModelOf(stage: Stage, agent: AgentConfig | undefined): string {
-  const {
-    provider = CODEX_PROVIDER,
-    agent: name = CODEX_AGENT,
-    model = DEFAULT_MODEL,
-  } = agent ?? {};
+  const { provider = CODEX_PROVIDER, model = DEFAULT_MODEL } = agent ?? {};
 
-  if (provider !== CODEX_PROVIDER || name !== CODEX_AGENT) {
+  if (provider !== CODEX_PROVIDER) {
     throw new CodexGenerateError((messages) =>
       messages.errors.unsupportedAgent({
         stage,
-        requested: `${provider}/${name}`,
-        supported: `${CODEX_PROVIDER}/${CODEX_AGENT}`,
+        requested: provider,
+        supported: CODEX_PROVIDER,
       }),
     );
   }

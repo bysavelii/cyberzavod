@@ -1,17 +1,15 @@
-// Who runs a stage: provider, agent and model. The core knows no provider:
+// Who runs a stage: provider and model. The core knows no provider or agent:
 // which combinations work is decided by the agent's adapter.
 
 import { isLine, isObject } from "./guards.ts";
 
 /**
- * Stage agent. Any field may be missing: then the adapter uses its own default.
+ * Stage performer settings. Any field may be missing: then the adapter uses its own default.
  * Model `default` means the same as no model.
  */
 export interface AgentConfig {
   /** Model provider, for example `anthropic`. */
   provider?: string;
-  /** Agent that does the work, for example `claude`; it selects the adapter. */
-  agent?: string;
   /** Model or `default`. */
   model?: string;
 }
@@ -22,10 +20,10 @@ export const DEFAULT_MODEL = "default";
 /** Agent description error: it came from outside and failed validation. */
 export class AgentConfigError extends Error {}
 
-const AGENT_FIELDS = ["provider", "agent", "model"] as const;
+const AGENT_FIELDS = ["provider", "model"] as const;
 
 /**
- * Validates a stage agent description.
+ * Validates a stage performer description.
  * @param {unknown} raw Parsed JSON of the agent.
  * @returns {AgentConfig} The validated description; missing fields are missing in the result too.
  * @throws {AgentConfigError} If the description is not an object or a field is not one-line text.

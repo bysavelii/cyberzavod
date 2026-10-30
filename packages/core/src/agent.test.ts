@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { AgentConfigError, parseAgentConfig } from "./agent.ts";
 
 describe("parseAgentConfig", () => {
-  it("принимает провайдера, агента и модель", () => {
-    const raw = { provider: "anthropic", agent: "claude", model: "default" };
+  it("принимает провайдера и модель", () => {
+    const raw = { provider: "anthropic", model: "default" };
 
     const config = parseAgentConfig(raw);
 
@@ -11,9 +11,9 @@ describe("parseAgentConfig", () => {
   });
 
   it("не добавляет отсутствующие поля", () => {
-    const config = parseAgentConfig({ agent: "claude" });
+    const config = parseAgentConfig({ model: "default" });
 
-    expect(config).toEqual({ agent: "claude" });
+    expect(config).toEqual({ model: "default" });
   });
 
   it.each([

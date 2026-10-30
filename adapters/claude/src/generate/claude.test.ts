@@ -5,22 +5,19 @@ describe("claudeModelOf", () => {
   it.each([
     ["planning", undefined, "opus"],
     ["implementation", { model: "default" }, "sonnet"],
-    ["review", { provider: "anthropic", agent: "claude" }, "opus"],
+    ["review", { provider: "anthropic" }, "opus"],
     ["verification", { model: "haiku" }, "haiku"],
-  ] as const)("этап %s с агентом %j работает на %s", (stage, agent, expected) => {
+  ] as const)("этап %s с настройками %j работает на %s", (stage, agent, expected) => {
     const model = claudeModelOf(stage, agent);
 
     expect(model).toBe(expected);
   });
 
-  it.each([{ provider: "openai" }, { agent: "codex" }])(
-    "отклоняет агента, которого адаптер не ведёт: %j",
-    (agent) => {
-      const act = () => claudeModelOf("planning", agent);
+  it("отклоняет провайдера, которого адаптер не ведёт", () => {
+    const act = () => claudeModelOf("planning", { provider: "openai" });
 
-      expect(act).toThrow(GenerateError);
-    },
-  );
+    expect(act).toThrow(GenerateError);
+  });
 });
 
 describe("claudeToolsOf", () => {

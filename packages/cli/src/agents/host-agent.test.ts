@@ -7,9 +7,10 @@ import { MARKER_DIRECTORY, PROJECT_CONFIG_FILE, writeProjectConfig } from "@cybe
 import { adapters } from "./fixtures.ts";
 import { adapterAt, adapterFor, hostAgentOf } from "./host-agent.ts";
 
-function configWith(agents: Record<string, { agent?: string; provider?: string }>): ProjectConfig {
+function configWith(agents: Record<string, object>): ProjectConfig {
   return parseProjectConfig({
     projectId: "shop",
+    schemaVersion: 2,
     harness: "0.9.1",
     workflow: "default",
     journal: ".cyberzavod/journal",
@@ -25,32 +26,26 @@ describe("hostAgentOf", () => {
     expect(hostAgentOf(config)).toBe("claude");
   });
 
-  it("берёт агента, которого назвали все этапы", () => {
-    const config = configWith({
-      implementation: { agent: "claude" },
-      review: { agent: "claude" },
-    });
+  it("берёт подключённого агента", () => {
+    const config = configWith({ claude: { implementation: {}, review: {} } });
 
     expect(hostAgentOf(config)).toBe("claude");
   });
 
-  it("не считает этап без имени агента", () => {
-    const config = configWith({ implementation: { provider: "anthropic" } });
+  it("берёт агента, у которого этап без модели", () => {
+    const config = configWith({ claude: { implementation: { provider: "anthropic" } } });
 
     expect(hostAgentOf(config)).toBe("claude");
   });
 
-  it("берёт codex, если его назвали все этапы", () => {
-    const config = configWith({
-      implementation: { agent: "codex" },
-      review: { agent: "codex" },
-    });
+  it("берёт codex, если он подключён", () => {
+    const config = configWith({ codex: { implementation: {}, review: {} } });
 
     expect(hostAgentOf(config)).toBe("codex");
   });
 
   it("отклоняет неизвестного агента и перечисляет поддерживаемых", () => {
-    const config = configWith({ implementation: { agent: "gemini" } });
+    const config = configWith({ gemini: { implementation: {} } });
 
     const act = () => hostAgentOf(config);
 
@@ -58,10 +53,7 @@ describe("hostAgentOf", () => {
   });
 
   it("отклоняет смешанных агентов и называет их", () => {
-    const config = configWith({
-      implementation: { agent: "claude" },
-      review: { agent: "gemini" },
-    });
+    const config = configWith({ claude: { implementation: {} }, gemini: { review: {} } });
 
     const act = () => hostAgentOf(config);
 
@@ -73,13 +65,13 @@ describe("hostAgentOf", () => {
 
 describe("adapterFor", () => {
   it("возвращает адаптер codex для проекта с codex", () => {
-    const config = configWith({ implementation: { agent: "codex" } });
+    const config = configWith({ codex: { implementation: {} } });
 
     expect(adapterFor(config, adapters).name).toBe("codex");
   });
 
   it("возвращает адаптер агента проекта", () => {
-    const config = configWith({ implementation: { agent: "claude" } });
+    const config = configWith({ claude: { implementation: {} } });
 
     expect(adapterFor(config, adapters).name).toBe("claude");
   });
@@ -103,7 +95,7 @@ describe("adapterAt", () => {
   it("с неподходящим агентом в конфиге возвращает адаптер по умолчанию", async () => {
     const root = await directory();
 
-    await writeProjectConfig(root, configWith({ implementation: { agent: "gemini" } }));
+    await writeProjectConfig(root, configWith({ gemini: { implementation: {} } }));
 
     const adapter = await adapterAt(root, adapters);
 
