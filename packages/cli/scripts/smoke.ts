@@ -21,6 +21,7 @@ const IS_WINDOWS = process.platform === "win32";
 // A space in the project path catches commands that join a path into a string without quotes.
 const PROJECT_NAME = "smoke project";
 const CODEX_PROJECT_NAME = "smoke codex project";
+const BOTH_AGENTS_PROJECT_NAME = "smoke both agents project";
 const PUBLISHED_FILES = [
   "LICENSE",
   "README.md",
@@ -890,6 +891,109 @@ async function codexPath(tool: string, root: string, cli: string): Promise<void>
   await checkCodexDisconnect(workspace, await codexConfigOf(workspace));
 }
 
+interface DoctorCheck {
+  id: string;
+  status: string;
+  agent?: string;
+}
+
+function checkBothAgentsDoctor(workspace: Workspace): void {
+  const run = cyberzavod(workspace, ["doctor", "--json"]);
+  const checks = jsonOf(run, "doctor --json").checks as DoctorCheck[];
+  const failedChecks = checks.filter((check) => check.status === "failed");
+  const hooksOf = checks.filter((check) => check.id === "hooks").map((check) => check.agent);
+  const agentChecks = checks.filter((check) => check.agent !== undefined);
+
+  assert.deepEqual(failedChecks.map((check) => check.id).sort(), ["rules"], run.stdout);
+  assert.deepEqual(hooksOf, ["claude", "codex"], "doctor did not check the hooks of both agents");
+  assert.ok(agentChecks.some((check) => check.id === "trust" && check.agent === "codex"));
+  step("doctor --json: the hooks of both agents, trust of Codex");
+}
+
+function checkBothAgentsStatus(workspace: Workspace): void {
+  const run = cyberzavod(workspace, ["status", "--json"]);
+  const status = jsonOf(run, "status --json");
+  const { stages } = status.workflow as { stages: { performers: { agent: string }[] }[] };
+  const performers = stages.flatMap((stage) => stage.performers.map((each) => each.agent));
+
+  assert.equal(status.schemaVersion, 2);
+  assert.ok(performers.includes("claude") && performers.includes("codex"), run.stdout);
+  step("status --json: performers of both agents");
+}
+
+async function checkAddedCodex(workspace: Workspace): Promise<void> {
+  const { project } = workspace;
+  const claudeBefore = await snapshot(project, [".claude/settings.json", "CLAUDE.md"]);
+
+  expectExit(cyberzavod(workspace, ["init", "--yes", "--agent", "codex"]), SUCCESS, "init codex");
+
+  const hooks = await readText(project, CODEX_HOOKS_FILE);
+  const config = await codexConfigOf(workspace);
+  const manifest = JSON.parse(await readText(project, ".cyberzavod/generated.json")) as {
+    agents: object;
+  };
+
+  assert.deepEqual(
+    await snapshot(project, [".claude/settings.json", "CLAUDE.md"]),
+    claudeBefore,
+    "adding Codex changed the Claude Code files",
+  );
+  assert.match(hooks, /cyberzavod@\d+\.\d+\.\d+ hook stop --agent codex/);
+  assert.equal(config.split(TRUST_MARK).length - 1, 1, "init did not trust the project once");
+  assert.deepEqual(Object.keys(manifest.agents), ["claude", "codex"]);
+  expectExit(cyberzavod(workspace, ["sync", "--check"]), SUCCESS, "sync --check with two agents");
+  step("init --agent codex after Claude Code: both agents in place, sync --check is green");
+}
+
+async function checkRemovedCodexThenAll(workspace: Workspace): Promise<void> {
+  const { project } = workspace;
+  const keptFiles = [...Object.keys(SOURCE_FILES), "AGENTS.md"];
+  const before = await snapshot(project, keptFiles);
+
+  expectExit(
+    cyberzavod(workspace, ["disconnect", "--agent", "codex", "--yes"]),
+    SUCCESS,
+    "disconnect --agent codex",
+  );
+
+  const hooks = JSON.parse(await readText(project, CODEX_HOOKS_FILE)) as unknown;
+
+  assert.equal(await codexConfigOf(workspace), USER_CODEX_CONFIG, "the Codex config is not back");
+  assert.deepEqual(hooks, USER_CODEX_HOOKS, "disconnect did not leave only the user's Codex hooks");
+  assert.ok(!existsSync(path.join(project, ".codex/config.toml")), "disconnect left .codex");
+  assert.ok(existsSync(path.join(project, ".claude/settings.json")), "Claude Code was removed");
+  expectExit(cyberzavod(workspace, ["sync", "--check"]), SUCCESS, "sync --check after Codex");
+  step("disconnect --agent codex: Claude Code stays, the Codex config is as before");
+
+  expectExit(cyberzavod(workspace, ["disconnect", "--yes"]), SUCCESS, "disconnect --yes");
+
+  const settings = JSON.parse(await readText(project, ".claude/settings.json")) as unknown;
+
+  assert.deepEqual(await snapshot(project, keptFiles), before, "the user's files changed");
+  assert.deepEqual(settings, USER_SETTINGS, "disconnect did not restore the user's settings");
+  assert.ok(!existsSync(path.join(project, ".cyberzavod/project.json")), "the config stayed");
+  step("disconnect: the project is back to the human's files");
+}
+
+// Claude Code first, then Codex added by a second init: the project is driven by both.
+async function bothAgentsPath(tool: string, root: string, cli: string): Promise<void> {
+  const bothRoot = path.join(root, "both-agents-path");
+  const project = path.join(bothRoot, BOTH_AGENTS_PROJECT_NAME);
+  const workspace: Workspace = { tool, project, cli, env: codexEnvironment(bothRoot) };
+
+  await createProject(project, {
+    ".claude/settings.json": `${JSON.stringify(USER_SETTINGS, null, 2)}\n`,
+    [CODEX_HOOKS_FILE]: `${JSON.stringify(USER_CODEX_HOOKS, null, 2)}\n`,
+  });
+  await writeFiles(codexHomeOf(workspace), { "config.toml": USER_CODEX_CONFIG });
+  console.log("Claude Code, then Codex");
+  await checkInit(workspace);
+  await checkAddedCodex(workspace);
+  checkBothAgentsDoctor(workspace);
+  checkBothAgentsStatus(workspace);
+  await checkRemovedCodexThenAll(workspace);
+}
+
 async function main(): Promise<void> {
   const root = await mkdtemp(path.join(os.tmpdir(), "cyberzavod-smoke-"));
   const tool = path.join(root, "tool");
@@ -905,6 +1009,7 @@ async function main(): Promise<void> {
     checkVersion({ tool, project: root, cli, env: {} }, packed);
     await claudePath(tool, root, { cli, viewer: path.join(tool, viewer.filename) });
     await codexPath(tool, root, cli);
+    await bothAgentsPath(tool, root, cli);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

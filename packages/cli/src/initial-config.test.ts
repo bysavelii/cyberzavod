@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
+import type { Stage } from "@cyberzavod/core";
 import { claudeAdapter } from "./agents/claude.ts";
 import type { DetectedProject } from "./detect.ts";
-import { initialConfigOf, type InitOverrides } from "./initial-config.ts";
+import {
+  DEFAULT_WORKFLOW,
+  initialConfigOf,
+  stageAgentsOf,
+  type InitOverrides,
+} from "./initial-config.ts";
 import { CommandError } from "./errors.ts";
 import { HARNESS_VERSION, readInstallation } from "./installation/installation.ts";
 import { CLI_MESSAGES } from "./messages/catalog.ts";
@@ -128,5 +134,20 @@ describe("initialConfigOf", () => {
     expect(error instanceof CommandError && error.describe(CLI_MESSAGES.ru)).toBe(
       "--journal пуст: укажите значение",
     );
+  });
+});
+
+describe("stageAgentsOf", () => {
+  it("даёт настройки агента этапам процесса, у которых в harness есть роль", async () => {
+    const { harness } = await readInstallation();
+
+    const stages = stageAgentsOf(harness, DEFAULT_WORKFLOW, claudeAdapter.identity);
+
+    const withRole = Object.keys(stages).every((stage) => harness.stages[stage as Stage].role);
+
+    expect({ withRole, settings: Object.values(stages) }).toEqual({
+      withRole: true,
+      settings: Object.values(stages).map(() => ({ provider: "anthropic", model: "default" })),
+    });
   });
 });

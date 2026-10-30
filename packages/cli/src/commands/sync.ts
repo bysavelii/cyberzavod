@@ -222,8 +222,15 @@ export async function previewProject(directory: string, options: PreviewOptions)
   return isClean(inspection.report) && !inspection.isHarnessOutdated;
 }
 
-// An agent that asks the human to approve its hooks keeps the approval for the new hooks.
-async function syncFilesCarryingTrust(
+/**
+ * Syncs the agent's files; an agent that asks the human to approve its hooks keeps the approval
+ * for the new hooks.
+ * @param {AgentAdapter} adapter The agent.
+ * @param {FilesRequest} request Which files to write and whether the human's may be overwritten.
+ * @returns {Promise<CarriedOver<SyncReport>>} What was written and the approval that moved.
+ * @throws {Error} If the agent files cannot be built or the agent's own config cannot be read.
+ */
+export async function syncFilesCarryingTrust(
   adapter: AgentAdapter,
   request: FilesRequest,
 ): Promise<CarriedOver<SyncReport>> {

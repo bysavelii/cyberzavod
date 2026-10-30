@@ -5,11 +5,18 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { MANIFEST_FILE, type DisconnectPlan } from "@cyberzavod/adapter-kit";
-import { LEGACY_TOOL_FILE, MARKER_DIRECTORY, PROJECT_CONFIG_FILE } from "@cyberzavod/storage";
+import type { ProjectConfig } from "@cyberzavod/core";
+import {
+  LEGACY_TOOL_FILE,
+  MARKER_DIRECTORY,
+  PROJECT_CONFIG_FILE,
+  writeProjectConfig,
+} from "@cyberzavod/storage";
 import type { AgentAdapter, UserConfigChange, UserConfigPlan } from "../agents/agent-adapter.ts";
-import { connectedAdaptersOf } from "../agents/host-agent.ts";
+import { adapterNamed, connectedAdaptersOf, type NonEmpty } from "../agents/host-agent.ts";
 import type { Adapters } from "../agents/registry.ts";
 import type { Confirmation } from "../confirmation.ts";
+import type { CommandError } from "../errors.ts";
 import { removeDirectoryIfEmpty } from "../files.ts";
 import type { CliMessages } from "../messages/cli-messages.ts";
 import { captureIgnoreEntry } from "./gitignore.ts";
@@ -18,6 +25,7 @@ import { RULES_FILE } from "./init.ts";
 import { requireProjectAt, type ProjectAt } from "./project.ts";
 
 const LIST_INDENT = "  ";
+const LIST_SEPARATOR = ", ";
 
 /** What disconnecting needs: confirmation and texts. */
 export interface DisconnectCommandOptions {
@@ -26,6 +34,8 @@ export interface DisconnectCommandOptions {
   messages: CliMessages;
   /** Adapters of the agents the CLI can drive. */
   adapters: Adapters;
+  /** `--agent`: remove only this agent; without it, all the connected agents. */
+  agent?: string | undefined;
 }
 
 /** Disconnect outcome: everything removed, or the human refused and nothing changed. */
@@ -52,10 +62,33 @@ function settingsLine(
   }
 }
 
-function manifestLine(plans: readonly AgentPlan[]): string[] {
+function manifestLine(scope: Scope, plans: readonly AgentPlan[], messages: CliMessages) {
   const isTouched = plans.some(({ plan }) => plan.manifest !== "unchanged");
 
-  return isTouched ? [MANIFEST_FILE] : [];
+  if (!isTouched) return [];
+
+  return [scope.isWhole ? MANIFEST_FILE : messages.disconnect.manifestPartly(MANIFEST_FILE)];
+}
+
+/**
+ * What disconnect takes: the agents to remove, and the ones that stay connected. When none stay,
+ * it is the whole project.
+ */
+interface Scope {
+  targets: NonEmpty<AgentAdapter>;
+  remaining: readonly AgentAdapter[];
+  isWhole: boolean;
+}
+
+function scopeOf(config: ProjectConfig, adapters: Adapters, agent: string | undefined): Scope {
+  const connected = connectedAdaptersOf(config, adapters);
+
+  if (agent === undefined) return { targets: connected, remaining: [], isWhole: true };
+
+  const named = adapterNamed(config, adapters, agent);
+  const remaining = connected.filter((adapter) => adapter !== named);
+
+  return { targets: [named], remaining, isWhole: remaining.length === 0 };
 }
 
 function takenBackLine(change: UserConfigChange, messages: CliMessages): string {
@@ -90,22 +123,27 @@ function removedByAgent({ adapter, plan, userConfigPlan }: AgentPlan, messages: 
 }
 
 interface RemovedLines {
+  scope: Scope;
   plans: readonly AgentPlan[];
   hasLegacy: boolean;
   messages: CliMessages;
 }
 
-function removedLines({ plans, hasLegacy, messages }: RemovedLines): string[] {
+function removedLines({ scope, plans, hasLegacy, messages }: RemovedLines): string[] {
+  const config = slashed(PROJECT_CONFIG_FILE);
+  const configLine = scope.isWhole ? config : messages.disconnect.agentSettingsRemoved(config);
+
   return [
     ...plans.flatMap((agentPlan) => removedByAgent(agentPlan, messages)),
-    ...manifestLine(plans),
+    ...manifestLine(scope, plans, messages),
     ...(hasLegacy ? [LEGACY_TOOL_FILE] : []),
-    slashed(PROJECT_CONFIG_FILE),
+    configLine,
   ];
 }
 
 interface KeptLines {
   project: ProjectAt;
+  scope: Scope;
   plans: readonly AgentPlan[];
   messages: CliMessages;
 }
@@ -121,16 +159,18 @@ function keptByAgent({ adapter, plan, userConfigPlan }: AgentPlan, messages: Cli
   ];
 }
 
-function keptLines({ project, plans, messages }: KeptLines): string[] {
+function keptLines({ project, scope, plans, messages }: KeptLines): string[] {
   const { disconnect } = messages;
   const journal = slashed(path.relative(project.root, project.journal));
   const ignoreEntry = captureIgnoreEntry(project.config.journal);
+  const remaining = scope.remaining.map((adapter) => adapter.name).join(LIST_SEPARATOR);
 
   return [
     disconnect.keepSource,
     RULES_FILE,
     disconnect.keepJournal(journal),
     ...(ignoreEntry === undefined ? [] : [disconnect.keepIgnoreEntry(ignoreEntry)]),
+    ...(scope.isWhole ? [] : [disconnect.keepAgents(remaining)]),
     ...plans.flatMap((agentPlan) => keptByAgent(agentPlan, messages)),
   ];
 }
@@ -160,14 +200,36 @@ function printAgentRulesHints(plans: readonly AgentPlan[], messages: CliMessages
   }
 }
 
+function doneMessage(scope: Scope, messages: CliMessages): string {
+  const [removed] = scope.targets;
+
+  return scope.isWhole ? messages.disconnect.done : messages.disconnect.agentDone(removed.terms);
+}
+
+function withoutAgents(config: ProjectConfig, removed: readonly AgentAdapter[]): ProjectConfig {
+  const names = removed.map((adapter) => adapter.name);
+  const kept = Object.entries(config.agents).filter(
+    ([name]) => !names.some((each) => each === name),
+  );
+
+  return { ...config, agents: Object.fromEntries(kept) };
+}
+
+async function removeProjectConfig(root: string): Promise<void> {
+  await rm(path.join(root, PROJECT_CONFIG_FILE), { force: true });
+  await removeDirectoryIfEmpty(path.join(root, MARKER_DIRECTORY));
+}
+
 /**
- * Removes Cyberzavod from the project after the human agrees: the files of every connected agent
- * and the manifest, their hooks and denials in the agent settings, the project config. The code,
- * AGENTS.md, the journal, the `.gitignore` line for raw logs and everything else in the settings
- * stay.
+ * Removes Cyberzavod from the project after the human agrees: the files of the agents to remove
+ * (all the connected ones, or the one `--agent` names) and their part of the manifest, their
+ * hooks and denials in the agent settings, and the project config, or only the agent's entry in
+ * it while other agents stay connected. The code, AGENTS.md, the journal, the `.gitignore` line
+ * for raw logs and everything else in the settings stay.
  * @param {string} directory Directory inside the project.
- * @param {DisconnectCommandOptions} options Confirmation, texts and adapters.
+ * @param {DisconnectCommandOptions} options Confirmation, texts, adapters and the agent to remove.
  * @returns {Promise<DisconnectOutcome>} Removed or cancelled.
+ * @throws {CommandError} If `--agent` names an agent the project is not connected to.
  * @throws {Error} If the directory is not in a project.
  * @throws {Error} If the settings or the agent's own config do not parse: then nothing is changed.
  */
@@ -175,14 +237,14 @@ export async function disconnectProject(
   directory: string,
   options: DisconnectCommandOptions,
 ): Promise<DisconnectOutcome> {
-  const { confirm, messages, adapters } = options;
+  const { confirm, messages, adapters, agent } = options;
   const project = await requireProjectAt(directory);
-  const connected = connectedAdaptersOf(project.config, adapters);
-  const plans = await Promise.all(connected.map((adapter) => planOf(adapter, project.root)));
-  const hasLegacy = await hasLegacyTool(project.root);
+  const scope = scopeOf(project.config, adapters, agent);
+  const plans = await Promise.all(scope.targets.map((adapter) => planOf(adapter, project.root)));
+  const hasLegacy = scope.isWhole && (await hasLegacyTool(project.root));
 
-  printList(messages.disconnect.willRemove, removedLines({ plans, hasLegacy, messages }));
-  printList(messages.disconnect.willKeep, keptLines({ project, plans, messages }));
+  printList(messages.disconnect.willRemove, removedLines({ scope, plans, hasLegacy, messages }));
+  printList(messages.disconnect.willKeep, keptLines({ project, scope, plans, messages }));
 
   const isConfirmed = await confirm(messages.disconnect.confirm);
 
@@ -199,10 +261,10 @@ export async function disconnectProject(
 
   if (hasLegacy) await removeLegacyTool(project.root);
 
-  await rm(path.join(project.root, PROJECT_CONFIG_FILE), { force: true });
-  await removeDirectoryIfEmpty(path.join(project.root, MARKER_DIRECTORY));
+  if (scope.isWhole) await removeProjectConfig(project.root);
+  else await writeProjectConfig(project.root, withoutAgents(project.config, scope.targets));
 
-  console.log(messages.disconnect.done);
+  console.log(doneMessage(scope, messages));
   printAgentRulesHints(plans, messages);
 
   return "removed";

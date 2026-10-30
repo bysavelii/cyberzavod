@@ -25,7 +25,7 @@ export const en: CliMessages = {
   commands: {
     init: {
       usage: "init [options]",
-      summary: "set up the project: config, AGENTS.md, agent files",
+      summary: "set up the project or add an agent: config, AGENTS.md, agent files",
       parameters: [
         { name: "--yes, -y", description: "do not ask for confirmation" },
         {
@@ -65,9 +65,15 @@ export const en: CliMessages = {
       ],
     },
     disconnect: {
-      usage: "disconnect [--yes]",
+      usage: "disconnect [--agent <agent>] [--yes]",
       summary: "remove Cyberzavod from the project; code, AGENTS.md, journal stay",
-      parameters: [{ name: "--yes, -y", description: "do not ask for confirmation" }],
+      parameters: [
+        {
+          name: "--agent <agent>",
+          description: "remove only this agent; default: all connected agents",
+        },
+        { name: "--yes, -y", description: "do not ask for confirmation" },
+      ],
     },
     status: {
       usage: "status [--json]",
@@ -171,6 +177,7 @@ export const en: CliMessages = {
   },
   init: {
     summaryTitle: "Cyberzavod will set up this project:",
+    addAgentTitle: (terms) => `Cyberzavod will add ${terms.product} to this project:`,
     projectId: (id) => `Project id: ${id}`,
     checks: (commands) => `Checks: ${commands}`,
     checksMissing: ({ file, terms }) =>
@@ -330,6 +337,9 @@ export const en: CliMessages = {
     settingsUpdated: (file) =>
       `Cyberzavod hooks and permission rules in ${file} (the rest of the file stays)`,
     settingsRemoved: (file) => `${file} (it holds only Cyberzavod hooks and rules)`,
+    manifestPartly: (file) => `${file} (only this agent's part; the other agents' stays)`,
+    agentSettingsRemoved: (file) => `this agent's settings in ${file} (the rest of the file stays)`,
+    keepAgents: (agents) => `the other agents and their files: ${agents}`,
     keepSource: "your project source",
     keepJournal: (path) => `the journal: ${path} (sessions, decisions, notes)`,
     keepIgnoreEntry: (entry) => `the .gitignore line ${entry} (keeps raw session logs out of git)`,
@@ -342,6 +352,8 @@ export const en: CliMessages = {
     cancelled: "Cancelled: nothing was changed.",
     needsConfirmation: `Nothing was changed: there is no terminal to ask in. To remove without asking, run:\n  ${CLI_COMMAND} disconnect --yes`,
     done: "Done: Cyberzavod was removed from this project. Review and commit the changes.",
+    agentDone: (terms) =>
+      `Done: ${terms.product} was removed from this project, the other agents stay connected. Review and commit the changes.`,
     agentRulesHint: ({ rulesFile, terms, agentRulesFile }) =>
       `${terms.product} reads ${agentRulesFile}: to keep your ${rulesFile} rules in ${terms.product}, create ${agentRulesFile} with the single line @${rulesFile}.`,
   },

@@ -4,7 +4,7 @@
 
 import { rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { PlannedProject } from "@cyberzavod/adapter-kit";
+import type { PlannedProject, SyncReport } from "@cyberzavod/adapter-kit";
 import { RULES_TODO_MARK, type ProjectConfig } from "@cyberzavod/core";
 import { PROJECT_CONFIG_FILE, readProjectConfig, writeProjectConfig } from "@cyberzavod/storage";
 import {
@@ -20,12 +20,12 @@ import type { Confirmation } from "../confirmation.ts";
 import { detectProject } from "../detect.ts";
 import { CommandError } from "../errors.ts";
 import { readOptionalText } from "../files.ts";
-import { initialConfigOf, type InitOverrides } from "../initial-config.ts";
+import { initialConfigOf, stageAgentsOf, type InitOverrides } from "../initial-config.ts";
 import type { Installation } from "../installation/installation.ts";
 import type { CliMessages } from "../messages/cli-messages.ts";
 import { appendIgnoreEntry, captureIgnoreEntry, GITIGNORE_FILE } from "./gitignore.ts";
-import { requireProjectAt } from "./project.ts";
-import { filesStatusOf, inspectProjectFiles } from "./sync.ts";
+import { requireProjectAt, type ProjectAt } from "./project.ts";
+import { filesStatusOf, inspectProjectFiles, syncFilesCarryingTrust } from "./sync.ts";
 
 /** The project's rules file for agents, in its root. */
 export const RULES_FILE = "AGENTS.md";
@@ -227,12 +227,131 @@ function requestedAgentOf(agent: string | undefined): AgentName | undefined {
   return agent === undefined ? undefined : agentNamed(agent);
 }
 
-// `init` does not change an already connected project; it says whether it is fine and what to do
-// next.
-async function reportConnected(root: string, options: InitOptions): Promise<boolean> {
+// Files the generator would write over are looked for before the first write: so a refusal leaves
+// the project untouched. A handwritten rules file of the agent that will become AGENTS.md is not in
+// the way.
+async function blockingFiles(
+  planned: PlannedProject,
+  adapter: AgentAdapter,
+  movedRulesFile: string | undefined,
+  installation: Installation,
+): Promise<string[]> {
+  const report = await adapter.previewFiles(planned, installation);
+  const blocked = [...report.conflicts, ...report.edited];
+
+  return blocked.filter((file) => file !== movedRulesFile);
+}
+
+function requireNothingBlocked(blocked: readonly string[]): void {
+  if (blocked.length === 0) return;
+
+  const files = blocked.join(LIST_SEPARATOR);
+
+  throw new CommandError((m) => m.errors.initBlocked({ files, rulesFile: RULES_FILE }));
+}
+
+// A project without agents in its config is driven by the default one: it stays connected when
+// another is added.
+function configWithAgent(
+  config: ProjectConfig,
+  adapter: AgentAdapter,
+  options: Pick<InitOptions, "installation" | "adapters">,
+): ProjectConfig {
+  const { installation, adapters } = options;
+  const stagesOf = (agent: AgentAdapter) =>
+    stageAgentsOf(installation.harness, config.workflow, agent.identity);
+  const isImplicit = Object.keys(config.agents).length === 0;
+  const defaultAgent = adapters[DEFAULT_AGENT_NAME];
+  const current = isImplicit ? { [defaultAgent.name]: stagesOf(defaultAgent) } : config.agents;
+
+  return { ...config, agents: { ...current, [adapter.name]: stagesOf(adapter) } };
+}
+
+function printAddAgentSummary(
+  adapter: AgentAdapter,
+  userConfigPlan: UserConfigPlan | undefined,
+  messages: CliMessages,
+): void {
+  const { init } = messages;
+  const trust = (userConfigPlan?.changes ?? []).map((change) => trustLine(change, messages));
+  const details = [init.files(adapter.initFiles.join(LIST_SEPARATOR)), ...trust];
+
+  console.log(init.addAgentTitle(adapter.terms));
+
+  for (const detail of details) console.log(`${SUMMARY_INDENT}${detail}`);
+}
+
+// One more agent in a connected project: its files and trust, and its entry in the config. The
+// connected agents are synced first, so the manifest holds their files before the new agent writes
+// its own part of it.
+async function addAgent(
+  project: ProjectAt,
+  adapter: AgentAdapter,
+  options: InitOptions,
+): Promise<boolean> {
+  const { confirm, installation, messages, adapters } = options;
+  const { root } = project;
+  const config = configWithAgent(project.config, adapter, options);
+  const blocked = await blockingFiles({ root, config }, adapter, undefined, installation);
+
+  requireNothingBlocked(blocked);
+
+  const userConfigPlan = await adapter.userConfig?.planConnect({ root, version: config.harness });
+
+  printAddAgentSummary(adapter, userConfigPlan, messages);
+
+  const isConfirmed = await confirm(messages.init.confirm);
+
+  if (!isConfirmed) {
+    console.log(messages.init.cancelled);
+
+    return true;
+  }
+
+  const connected = connectedAdaptersOf(project.config, adapters);
+  const request = { projectDirectory: root, installation, force: false };
+  const connectedReports: SyncReport[] = [];
+
+  for (const earlier of connected) {
+    const { value } = await syncFilesCarryingTrust(earlier, request);
+
+    connectedReports.push(value);
+  }
+
+  const report = await adapter.syncFiles(request);
+
+  await writeProjectConfig(root, config);
+  await userConfigPlan?.apply();
+
+  const reports = [...connectedReports, report];
+
+  printDone({
+    changed: reports.flatMap((each) => [...each.added, ...each.updated]),
+    isRulesFileWritten: false,
+    isIgnoreEntryAdded: false,
+    adapter,
+    messages,
+  });
+
+  return true;
+}
+
+// `init` does not change an already connected project, except to add the agent `--agent` names;
+// otherwise it says whether the project is fine and what to do next.
+async function reportConnected(
+  root: string,
+  options: InitOptions,
+  requested: AgentName | undefined,
+): Promise<boolean> {
   const { installation, messages, adapters } = options;
   const project = await requireProjectAt(root);
   const connected = connectedAdaptersOf(project.config, adapters);
+  const isRequestedConnected = connected.some((adapter) => adapter.name === requested);
+
+  if (requested !== undefined && !isRequestedConnected) {
+    return addAgent(project, adapters[requested], options);
+  }
+
   const { report, isHarnessOutdated } = await inspectProjectFiles(project, installation, connected);
   const status = filesStatusOf(report);
   const isCurrent = status === "current" && !isHarnessOutdated;
@@ -243,23 +362,6 @@ async function reportConnected(root: string, options: InitOptions): Promise<bool
   console.log(isCurrent ? messages.init.nothingToDo : messages.init.runSync);
 
   return isCurrent;
-}
-
-// Files the generator would write over are looked for before the first write: so a refusal leaves
-// the project untouched. A handwritten rules file of the agent that will become AGENTS.md is not in
-// the way.
-async function blockingFiles(
-  planned: PlannedProject,
-  adapter: AgentAdapter,
-  rulesPlan: RulesPlan,
-  installation: Installation,
-): Promise<string[]> {
-  const report = await adapter.previewFiles(planned, installation);
-  const blocked = [...report.conflicts, ...report.edited];
-
-  if (rulesPlan.kind !== "moved") return blocked;
-
-  return blocked.filter((file) => file !== rulesPlan.from);
 }
 
 /**
@@ -278,7 +380,7 @@ export async function initProject(root: string, options: InitOptions): Promise<b
   const requested = requestedAgentOf(options.agent);
   const isConnected = (await readProjectConfig(root)) !== undefined;
 
-  if (isConnected) return reportConnected(root, options);
+  if (isConnected) return reportConnected(root, options, requested);
 
   const detected = await detectProject(root);
   const adapter = adapters[requested ?? DEFAULT_AGENT_NAME];
@@ -290,13 +392,10 @@ export async function initProject(root: string, options: InitOptions): Promise<b
   });
   const rulesPlan = await planRules(root, adapter);
   const ignoreEntry = captureIgnoreEntry(config.journal);
-  const blocked = await blockingFiles({ root, config }, adapter, rulesPlan, installation);
+  const movedRulesFile = rulesPlan.kind === "moved" ? rulesPlan.from : undefined;
+  const blocked = await blockingFiles({ root, config }, adapter, movedRulesFile, installation);
 
-  if (blocked.length > 0) {
-    const files = blocked.join(LIST_SEPARATOR);
-
-    throw new CommandError((m) => m.errors.initBlocked({ files, rulesFile: RULES_FILE }));
-  }
+  requireNothingBlocked(blocked);
 
   // The human's own agent config is checked before the summary: if it cannot be edited, nothing
   // has been written yet.

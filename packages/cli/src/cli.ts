@@ -253,13 +253,21 @@ const COMMANDS: Readonly<Record<CommandName, Command>> = {
   disconnect: {
     section: "maintenance",
     run: async ({ args, directory, messages, adapters }) => {
-      const { values } = parseArgs({ args, options: { yes: { type: "boolean", short: "y" } } });
+      const { values } = parseArgs({
+        args,
+        options: { yes: { type: "boolean", short: "y" }, agent: { type: "string" } },
+      });
       const isTerminal = process.stdin.isTTY === true;
       const canAsk = values.yes !== true && isTerminal;
       const confirm = canAsk
         ? terminalConfirmation({ input: process.stdin, output: process.stdout })
         : refuseWithoutTerminal(values.yes === true, messages);
-      const outcome = await disconnectProject(directory, { confirm, messages, adapters });
+      const outcome = await disconnectProject(directory, {
+        confirm,
+        messages,
+        adapters,
+        agent: values.agent,
+      });
       const isRefused = outcome === "cancelled" && !canAsk;
 
       return isRefused ? FAILURE : SUCCESS;

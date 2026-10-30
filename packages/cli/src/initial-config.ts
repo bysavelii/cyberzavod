@@ -6,7 +6,6 @@ import {
   DEFAULT_MODEL,
   type Harness,
   type ProjectConfig,
-  type Stage,
   type StageAgents,
 } from "@cyberzavod/core";
 import { DEFAULT_JOURNAL, workflowOf } from "@cyberzavod/storage";
@@ -87,15 +86,22 @@ function journalOption(value: string): string {
   return relative;
 }
 
-// Every workflow stage that has a role in the harness gets the agent's settings.
-function stageAgentsOf(
+/**
+ * The agent's settings for every stage of the workflow that has a role in the harness.
+ * @param {Harness} harness Harness: workflows and stages.
+ * @param {string} workflowName Workflow of the project.
+ * @param {AgentIdentity} identity The agent's provider.
+ * @returns {StageAgents} Settings of the agent by stage.
+ * @throws {Error} If the harness has no such workflow.
+ */
+export function stageAgentsOf(
   harness: Harness,
-  stages: readonly Stage[],
+  workflowName: string,
   identity: AgentIdentity,
 ): StageAgents {
   const stageAgents: StageAgents = {};
 
-  for (const stage of stages) {
+  for (const stage of workflowOf(harness, workflowName).stages) {
     if (harness.stages[stage].role === undefined) continue;
 
     stageAgents[stage] = { provider: identity.provider, model: DEFAULT_MODEL };
@@ -128,7 +134,7 @@ export function initialConfigOf(source: InitialConfigSource): ProjectConfig {
     harness: HARNESS_VERSION,
     workflow: workflow.name,
     journal,
-    agents: { [identity.agent]: stageAgentsOf(harness, workflow.stages, identity) },
+    agents: { [identity.agent]: stageAgentsOf(harness, workflow.name, identity) },
     verification: { commands, paths: [] },
     stack: stackOf(detected),
   };

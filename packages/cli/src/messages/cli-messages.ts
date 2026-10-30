@@ -83,6 +83,8 @@ export interface HelpMessages {
  */
 export interface InitMessages {
   summaryTitle: string;
+  /** `init --agent` in a connected project adds one more agent: the title of its summary. */
+  addAgentTitle(terms: AgentTerms): string;
   projectId(id: string): string;
   /** Checks found or set by a flag; `commands` are comma-separated. */
   checks(commands: string): string;
@@ -241,6 +243,12 @@ export interface DisconnectMessages {
   willKeep: string;
   settingsUpdated(file: string): string;
   settingsRemoved(file: string): string;
+  /** Disconnecting one of several agents takes only its part of the manifest `file`. */
+  manifestPartly(file: string): string;
+  /** Disconnecting one of several agents takes its settings out of the project config `file`. */
+  agentSettingsRemoved(file: string): string;
+  /** The other agents `agents` (comma-separated) stay connected with their files. */
+  keepAgents(agents: string): string;
   keepSource: string;
   keepJournal(path: string): string;
   keepIgnoreEntry(entry: string): string;
@@ -257,6 +265,8 @@ export interface DisconnectMessages {
   needsConfirmation: string;
   /** The result. */
   done: string;
+  /** The result of disconnecting one agent of several; the others stay connected. */
+  agentDone(terms: AgentTerms): string;
   /**
    * For an agent that reads its own rules file `agentRulesFile` instead of AGENTS.md: how to keep
    * the project rules in it.

@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RULES_TODO_MARK } from "@cyberzavod/core";
 import { PROJECT_CONFIG_FILE } from "@cyberzavod/storage";
-import { adapters } from "../agents/fixtures.ts";
+import { adapters, adaptersWithCodexHome } from "../agents/fixtures.ts";
 import type { Confirmation } from "../confirmation.ts";
 import { readInstallation, type Installation } from "../installation/installation.ts";
 import { CLI_MESSAGES } from "../messages/catalog.ts";
@@ -217,6 +217,59 @@ describe("initProject", () => {
     expect({ asked, connected: await exists(PROJECT_CONFIG_FILE) }).toEqual({
       asked: [],
       connected: false,
+    });
+  });
+
+  describe("добавление агента в подключённый проект", () => {
+    async function connectedWithoutAgents(): Promise<void> {
+      const { confirm } = answering(true);
+
+      await initProject(root, { confirm, overrides: {}, installation, messages, adapters });
+
+      const file = path.join(root, PROJECT_CONFIG_FILE);
+      const config = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+
+      await writeFile(file, JSON.stringify({ ...config, agents: {} }));
+    }
+
+    it("печатает сводку с файлами и спрашивает один раз", async () => {
+      await connectedWithoutAgents();
+      vi.mocked(console.log).mockClear();
+      const { confirm, asked, seen } = answering(true);
+
+      await initProject(root, {
+        confirm,
+        overrides: {},
+        installation,
+        messages,
+        adapters: adaptersWithCodexHome(path.join(root, ".codex-home")),
+        agent: "codex",
+      });
+
+      expect({ asked, summary: seen[0] }).toEqual({
+        asked: [messages.init.confirm],
+        summary: expect.stringContaining(messages.init.addAgentTitle(adapters.codex.terms)),
+      });
+    });
+
+    it("в проекте без агентов в конфиге оставляет подразумеваемого Claude Code подключённым", async () => {
+      await connectedWithoutAgents();
+      const { confirm } = answering(true);
+
+      await initProject(root, {
+        confirm,
+        overrides: {},
+        installation,
+        messages,
+        adapters: adaptersWithCodexHome(path.join(root, ".codex-home")),
+        agent: "codex",
+      });
+
+      const config = JSON.parse(await readFile(path.join(root, PROJECT_CONFIG_FILE), "utf8")) as {
+        agents: object;
+      };
+
+      expect(Object.keys(config.agents)).toEqual(["claude", "codex"]);
     });
   });
 });

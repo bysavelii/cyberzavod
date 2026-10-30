@@ -25,7 +25,7 @@ export const ru: CliMessages = {
   commands: {
     init: {
       usage: "init [options]",
-      summary: "подключить проект: конфиг, AGENTS.md, файлы агента",
+      summary: "подключить проект или добавить агента: конфиг, AGENTS.md, файлы",
       parameters: [
         { name: "--yes, -y", description: "не спрашивать подтверждение" },
         {
@@ -65,9 +65,15 @@ export const ru: CliMessages = {
       ],
     },
     disconnect: {
-      usage: "disconnect [--yes]",
+      usage: "disconnect [--agent <агент>] [--yes]",
       summary: "убрать Cyberzavod из проекта; код, AGENTS.md и журнал остаются",
-      parameters: [{ name: "--yes, -y", description: "не спрашивать подтверждения" }],
+      parameters: [
+        {
+          name: "--agent <агент>",
+          description: "убрать только этого агента; без флага — всех подключённых",
+        },
+        { name: "--yes, -y", description: "не спрашивать подтверждения" },
+      ],
     },
     status: {
       usage: "status [--json]",
@@ -171,6 +177,7 @@ export const ru: CliMessages = {
   },
   init: {
     summaryTitle: "Cyberzavod подключит этот проект:",
+    addAgentTitle: (terms) => `Cyberzavod добавит в проект ${terms.product}:`,
     projectId: (id) => `Id проекта: ${id}`,
     checks: (commands) => `Проверки: ${commands}`,
     checksMissing: ({ file, terms }) =>
@@ -329,6 +336,10 @@ export const ru: CliMessages = {
     willKeep: "Останется:",
     settingsUpdated: (file) => `хуки и запреты Cyberzavod в ${file} (остальное в файле останется)`,
     settingsRemoved: (file) => `${file} (в нём только хуки и запреты Cyberzavod)`,
+    manifestPartly: (file) => `${file} (только часть этого агента; части других останутся)`,
+    agentSettingsRemoved: (file) =>
+      `настройки этого агента в ${file} (остальное в файле останется)`,
+    keepAgents: (agents) => `остальные агенты и их файлы: ${agents}`,
     keepSource: "код проекта",
     keepJournal: (path) => `журнал: ${path} (сессии, решения, заметки)`,
     keepIgnoreEntry: (entry) =>
@@ -342,6 +353,8 @@ export const ru: CliMessages = {
     cancelled: "Отменено: ничего не изменено.",
     needsConfirmation: `Ничего не изменено: спросить негде, терминала нет. Чтобы удалить без вопроса, запустите:\n  ${CLI_COMMAND} disconnect --yes`,
     done: "Готово: Cyberzavod убран из проекта. Просмотрите и закоммитьте изменения.",
+    agentDone: (terms) =>
+      `Готово: ${terms.product} убран из проекта, остальные агенты остаются подключёнными. Просмотрите и закоммитьте изменения.`,
     agentRulesHint: ({ rulesFile, terms, agentRulesFile }) =>
       `${terms.product} читает ${agentRulesFile}: чтобы правила ${rulesFile} остались в ${terms.product}, создайте ${agentRulesFile} с одной строкой @${rulesFile}.`,
   },
