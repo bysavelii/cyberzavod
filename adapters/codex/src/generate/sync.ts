@@ -176,7 +176,7 @@ async function planSync(
  * agents, skills, hooks, and the manifest of generated output.
  * @param {SyncOptions} options Project and mode.
  * @returns {Promise<SyncReport>} What was written and deleted or, in a check, what is outdated.
- * @throws {CodexGenerateError} If the config assigns a stage to another agent.
+ * @throws {CodexGenerateError} If the config gives a Codex stage another provider.
  * @throws {KitError} If the generator would write over human-written or hand-edited files
  *   without `force`, or the hooks file cannot be parsed.
  */
@@ -195,7 +195,7 @@ export async function syncCodex(options: SyncOptions): Promise<SyncReport> {
  * @param {PlannedProject} planned Root and config of the future project.
  * @param {CodexInstallation} installation Harness and templates of the running version.
  * @returns {Promise<SyncReport>} What will appear, what will be updated, and what conflicts.
- * @throws {CodexGenerateError} If the config assigns a stage to another agent.
+ * @throws {CodexGenerateError} If the config gives a Codex stage another provider.
  * @throws {KitError} If the hooks file cannot be parsed.
  */
 export async function previewCodex(

@@ -2,7 +2,7 @@
 // will appear, asks a single "Continue?", writes the config, AGENTS.md and agent files. The project
 // stays where it is: Cyberzavod neither clones nor moves it.
 
-import { rename, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { PlannedProject, SyncReport } from "@cyberzavod/adapter-kit";
 import { RULES_TODO_MARK, type ProjectConfig } from "@cyberzavod/core";
@@ -21,11 +21,11 @@ import { detectProject } from "../detect.ts";
 import { CommandError } from "../errors.ts";
 import { readOptionalText } from "../files.ts";
 import { initialConfigOf, stageAgentsOf, type InitOverrides } from "../initial-config.ts";
-import type { Installation } from "../installation/installation.ts";
+import { HARNESS_VERSION, type Installation } from "../installation/installation.ts";
 import type { CliMessages } from "../messages/cli-messages.ts";
 import { appendIgnoreEntry, captureIgnoreEntry, GITIGNORE_FILE } from "./gitignore.ts";
 import { requireProjectAt, type ProjectAt } from "./project.ts";
-import { filesStatusOf, inspectProjectFiles, syncFilesCarryingTrust } from "./sync.ts";
+import { filesStatusOf, inspectProjectFiles } from "./sync.ts";
 
 /** The project's rules file for agents, in its root. */
 export const RULES_FILE = "AGENTS.md";
@@ -281,16 +281,58 @@ function printAddAgentSummary(
   for (const detail of details) console.log(`${SUMMARY_INDENT}${detail}`);
 }
 
+// Adding an agent to a project of another Cyberzavod version would mix templates and hook
+// versions; sync brings the project to this version first.
+function requireCurrentHarness(config: ProjectConfig, adapter: AgentAdapter): void {
+  const configVersion = config.harness;
+
+  if (configVersion === HARNESS_VERSION) return;
+
+  throw new CommandError((m) =>
+    m.errors.addAgentNeedsSync({
+      file: slashed(PROJECT_CONFIG_FILE),
+      configVersion,
+      cliVersion: HARNESS_VERSION,
+      agent: adapter.name,
+    }),
+  );
+}
+
+// The config goes first, as in sync: the generator reads the agent's stages from it. If the
+// agent's files fail, the config goes back to its previous text.
+async function syncFilesOfAddedAgent(
+  root: string,
+  config: ProjectConfig,
+  adapter: AgentAdapter,
+  installation: Installation,
+): Promise<SyncReport> {
+  const configFile = path.join(root, PROJECT_CONFIG_FILE);
+  const previousConfigText = await readFile(configFile, "utf8");
+
+  await writeProjectConfig(root, config);
+
+  try {
+    return await adapter.syncFiles({ projectDirectory: root, installation, force: false });
+  } catch (err) {
+    await writeFile(configFile, previousConfigText);
+
+    throw err;
+  }
+}
+
 // One more agent in a connected project: its files and trust, and its entry in the config. The
-// connected agents are synced first, so the manifest holds their files before the new agent writes
-// its own part of it.
+// files of the connected agents are not touched, hand edits included: with the harness current,
+// their manifest sections are already in the format the new agent adds its own section to.
 async function addAgent(
   project: ProjectAt,
   adapter: AgentAdapter,
   options: InitOptions,
 ): Promise<boolean> {
-  const { confirm, installation, messages, adapters } = options;
+  const { confirm, installation, messages } = options;
   const { root } = project;
+
+  requireCurrentHarness(project.config, adapter);
+
   const config = configWithAgent(project.config, adapter, options);
   const blocked = await blockingFiles({ root, config }, adapter, undefined, installation);
 
@@ -308,25 +350,12 @@ async function addAgent(
     return true;
   }
 
-  const connected = connectedAdaptersOf(project.config, adapters);
-  const request = { projectDirectory: root, installation, force: false };
-  const connectedReports: SyncReport[] = [];
+  const report = await syncFilesOfAddedAgent(root, config, adapter, installation);
 
-  for (const earlier of connected) {
-    const { value } = await syncFilesCarryingTrust(earlier, request);
-
-    connectedReports.push(value);
-  }
-
-  const report = await adapter.syncFiles(request);
-
-  await writeProjectConfig(root, config);
   await userConfigPlan?.apply();
 
-  const reports = [...connectedReports, report];
-
   printDone({
-    changed: reports.flatMap((each) => [...each.added, ...each.updated]),
+    changed: [...report.added, ...report.updated],
     isRulesFileWritten: false,
     isIgnoreEntryAdded: false,
     adapter,

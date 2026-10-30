@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RULES_TODO_MARK } from "@cyberzavod/core";
 import { PROJECT_CONFIG_FILE } from "@cyberzavod/storage";
 import { adapters, adaptersWithCodexHome } from "../agents/fixtures.ts";
+import type { FilesRequest } from "../agents/agent-adapter.ts";
 import type { Confirmation } from "../confirmation.ts";
 import { readInstallation, type Installation } from "../installation/installation.ts";
 import { CLI_MESSAGES } from "../messages/catalog.ts";
@@ -270,6 +271,55 @@ describe("initProject", () => {
       };
 
       expect(Object.keys(config.agents)).toEqual(["claude", "codex"]);
+    });
+
+    it("пишет конфиг с новым агентом до его файлов: генератор берёт этапы из конфига", async () => {
+      await connectedWithoutAgents();
+      const { confirm } = answering(true);
+      const codexAdapters = adaptersWithCodexHome(path.join(root, ".codex-home"));
+      const seenAgents: string[][] = [];
+      const recordingSync = async (request: FilesRequest) => {
+        const configFile = path.join(request.projectDirectory, PROJECT_CONFIG_FILE);
+        const config = JSON.parse(await readFile(configFile, "utf8")) as { agents: object };
+
+        seenAgents.push(Object.keys(config.agents));
+
+        return codexAdapters.codex.syncFiles(request);
+      };
+
+      await initProject(root, {
+        confirm,
+        overrides: {},
+        installation,
+        messages,
+        adapters: { ...codexAdapters, codex: { ...codexAdapters.codex, syncFiles: recordingSync } },
+        agent: "codex",
+      });
+
+      expect(seenAgents).toEqual([["claude", "codex"]]);
+    });
+
+    it("если файлы агента не записались, возвращает конфиг как был", async () => {
+      await connectedWithoutAgents();
+      const { confirm } = answering(true);
+      const codexAdapters = adaptersWithCodexHome(path.join(root, ".codex-home"));
+      const failingSync = () => Promise.reject(new Error("disk full"));
+      const configFile = path.join(root, PROJECT_CONFIG_FILE);
+      const before = await readFile(configFile, "utf8");
+
+      const failure = await initProject(root, {
+        confirm,
+        overrides: {},
+        installation,
+        messages,
+        adapters: { ...codexAdapters, codex: { ...codexAdapters.codex, syncFiles: failingSync } },
+        agent: "codex",
+      }).catch((err: unknown) => err);
+
+      expect({ failure, config: await readFile(configFile, "utf8") }).toEqual({
+        failure: new Error("disk full"),
+        config: before,
+      });
     });
   });
 });

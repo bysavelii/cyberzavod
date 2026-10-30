@@ -46,7 +46,7 @@ Run every command as `npx cyberzavod <command>`.
 
 **Getting started**
 
-- `init`: set up the project: config, `AGENTS.md`, agent files. `--agent claude|codex` picks the agent; the default is `claude`. In a connected project, `init --agent <other agent>` adds that agent after one confirmation and leaves the first untouched.
+- `init`: set up the project: config, `AGENTS.md`, agent files. `--agent claude|codex` picks the agent; the default is `claude`. In a connected project, `init --agent <other agent>` adds that agent after one confirmation and leaves the first untouched; a project set up by another Cyberzavod version needs `sync` first.
 - `status`: project, workflow, stage agents, checks and the journal.
 
 **Journal**

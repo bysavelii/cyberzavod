@@ -119,7 +119,7 @@ export const ru: CliMessages = {
       ],
     },
     publish: {
-      usage: "publish [--agent <агент>] [--draft <файл>] [--build <id сборки>]",
+      usage: "publish [--agent <агент>] [--draft <черновик>] [--build <сборка>]",
       summary: "опубликовать отредактированный черновик записями в журнал",
       parameters: [
         {
@@ -440,6 +440,8 @@ export const ru: CliMessages = {
     jsonNeedsPreview: `--json работает только с --check или --diff: ${CLI_COMMAND} sync --check --json`,
     initBlocked: ({ files, rulesFile }) =>
       `проект не подключён.\n\nЭти файлы уже есть, и Cyberzavod ими не управляет: ${files}\n\nНичего не изменено.\n\nКак починить: перенесите их содержимое в ${rulesFile}, удалите их и запустите снова:\n  ${CLI_COMMAND} init`,
+    addAgentNeedsSync: ({ file, configVersion, cliVersion, agent }) =>
+      `агент не добавлен: ${file} — для Cyberzavod ${configVersion}, а это ${cliVersion}. Ничего не изменено.\n\nКак починить: переведите проект на эту версию и добавьте агента снова:\n  ${CLI_COMMAND} sync\n  ${CLI_COMMAND} init --agent ${agent}`,
     blankOption: (option) => `${option} пуст: укажите значение`,
     journalIsProjectRoot: (path) =>
       `--journal ${path} — это корень проекта: укажите каталог журнала, например .cyberzavod/journal`,

@@ -215,7 +215,7 @@ async function planSync(
  * each AGENTS.md, role agents, skills, hooks in the settings, and the manifest of generated output.
  * @param {SyncOptions} options Project and mode.
  * @returns {Promise<SyncReport>} What was written and deleted or, in a check, what is outdated.
- * @throws {GenerateError} If the config assigns a stage to another agent.
+ * @throws {GenerateError} If the config gives a Claude Code stage another provider.
  * @throws {KitError} If the generator would write over human-written or hand-edited files
  *   without `force`, or the project settings cannot be parsed.
  */
@@ -234,7 +234,7 @@ export async function syncClaude(options: SyncOptions): Promise<SyncReport> {
  * @param {PlannedProject} planned Root and config of the future project.
  * @param {ClaudeInstallation} installation Harness and templates of the running version.
  * @returns {Promise<SyncReport>} What will appear, what will be updated, and what conflicts.
- * @throws {GenerateError} If the config assigns a stage to another agent.
+ * @throws {GenerateError} If the config gives a Claude Code stage another provider.
  * @throws {KitError} If the project settings cannot be parsed.
  */
 export async function previewClaude(

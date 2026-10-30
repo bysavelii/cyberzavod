@@ -204,6 +204,7 @@ async function applyManifestOutcome(
     case "updated": {
       const remaining = manifestTextWithout(await readOptional(manifestPath), owner);
 
+      // The manifest changed since the plan: deleting the file is left to a plan that saw it empty.
       if (remaining !== undefined) await writeFile(manifestPath, remaining);
 
       break;

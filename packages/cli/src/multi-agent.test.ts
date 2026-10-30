@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SyncReport } from "@cyberzavod/adapter-kit";
 import { PROJECT_CONFIG_FILE } from "@cyberzavod/storage";
 import { adaptersWithCodexHome } from "./agents/fixtures.ts";
 import { runCli } from "./cli.ts";
@@ -21,6 +22,8 @@ import type { Environment } from "./messages/language.ts";
 
 const CLAUDE_FILE = ".claude/settings.json";
 const CODEX_FILE = ".codex/hooks.json";
+const MANIFEST_FILE = ".cyberzavod/generated.json";
+const PREVIOUS_HARNESS = "1.0.0";
 
 let workspace: string;
 let root: string;
@@ -82,9 +85,55 @@ async function projectAgents(): Promise<string[]> {
 }
 
 async function manifestAgents(): Promise<string[]> {
-  const manifest = JSON.parse(await readText(".cyberzavod/generated.json")) as { agents: object };
+  const manifest = JSON.parse(await readText(MANIFEST_FILE)) as { agents: object };
 
   return Object.keys(manifest.agents);
+}
+
+async function schemaVersionOf(file: string): Promise<unknown> {
+  const document = JSON.parse(await readText(file)) as { schemaVersion: unknown };
+
+  return document.schemaVersion;
+}
+
+// What `sync --check --json` reports about the files, the way scripts read it.
+async function filesReportedBySyncCheck(): Promise<SyncReport> {
+  vi.mocked(console.log).mockClear();
+  await runCli(["sync", "--check", "--json"], root, env);
+
+  const document = JSON.parse(printedLog()) as { files: SyncReport };
+
+  return document.files;
+}
+
+interface Version2Config {
+  agents: Record<string, Record<string, object>>;
+}
+
+interface Version2Manifest {
+  agents: Record<string, { files: object; settings: object }>;
+}
+
+// A Claude Code project as Cyberzavod 1.x left it: the config names the agent on each stage, the
+// manifest has no sections.
+async function connectClaudeOfVersion1(): Promise<void> {
+  await connectClaude();
+
+  const config = JSON.parse(await readText(PROJECT_CONFIG_FILE)) as Version2Config;
+  const stages = Object.entries(config.agents.claude ?? {}).map(
+    ([stage, settings]) => [stage, { ...settings, agent: "claude" }] as const,
+  );
+  const configOfVersion1 = {
+    ...config,
+    schemaVersion: 1,
+    harness: PREVIOUS_HARNESS,
+    agents: Object.fromEntries(stages),
+  };
+  const manifest = JSON.parse(await readText(MANIFEST_FILE)) as Version2Manifest;
+  const manifestOfVersion1 = { schemaVersion: 1, ...manifest.agents.claude };
+
+  await writeFile(path.join(root, PROJECT_CONFIG_FILE), JSON.stringify(configOfVersion1));
+  await writeFile(path.join(root, MANIFEST_FILE), JSON.stringify(manifestOfVersion1));
 }
 
 describe("runCli с двумя агентами в проекте", () => {
@@ -202,20 +251,66 @@ describe("runCli с двумя агентами в проекте", () => {
       });
     });
 
-    it("не прячет исправленный руками файл Claude Code", async () => {
+    it("добавляет Codex рядом с исправленным руками файлом Claude Code и не прячет его", async () => {
       await connectClaude();
       await appendFile(path.join(root, "CLAUDE.md"), "\nmy own line\n");
 
-      await runCli(["init", "--yes", "--agent", "codex"], root, env);
+      const code = await runCli(["init", "--yes", "--agent", "codex"], root, env);
 
-      vi.mocked(console.log).mockClear();
-      await runCli(["sync", "--check", "--json"], root, env);
+      expect({
+        code,
+        agents: await projectAgents(),
+        codex: await exists(CODEX_FILE),
+        edited: (await filesReportedBySyncCheck()).edited,
+      }).toEqual({
+        code: 0,
+        agents: ["claude", "codex"],
+        codex: true,
+        edited: ["CLAUDE.md"],
+      });
+    });
 
-      const document = JSON.parse(printedLog()) as {
-        files: { edited: string[] };
-      };
+    it("в проекте прежней версии просит сначала sync и ничего не меняет", async () => {
+      await connectClaudeOfVersion1();
 
-      expect(document.files.edited).toEqual(["CLAUDE.md"]);
+      const before = await projectFiles();
+
+      const code = await runCli(["init", "--yes", "--agent", "codex"], root, env);
+
+      expect({
+        code,
+        error: printedError(),
+        files: await projectFiles(),
+        human: await humanCodexConfig(),
+      }).toEqual({
+        code: 1,
+        error: expect.stringContaining("npx cyberzavod sync"),
+        files: before,
+        human: undefined,
+      });
+    });
+
+    it("после sync проекта прежней версии добавляет Codex, не меняя файлов Claude Code", async () => {
+      await connectClaudeOfVersion1();
+      await runCli(["sync"], root, env);
+
+      const claudeBefore = await projectFiles(".claude");
+
+      const code = await runCli(["init", "--yes", "--agent", "codex"], root, env);
+
+      expect({
+        code,
+        claude: await projectFiles(".claude"),
+        agents: await projectAgents(),
+        manifest: await manifestAgents(),
+        check: await runCli(["sync", "--check"], root, env),
+      }).toEqual({
+        code: 0,
+        claude: claudeBefore,
+        agents: ["claude", "codex"],
+        manifest: ["claude", "codex"],
+        check: 0,
+      });
     });
 
     it("добавляет Claude Code в проект Codex", async () => {
@@ -261,6 +356,40 @@ describe("runCli с двумя агентами в проекте", () => {
         codex: await exists(CODEX_FILE),
         log: printedLog(),
       }).toEqual({ code: 0, claude: true, codex: true, log: "Up to date: nothing to change." });
+    });
+
+    it("переводит конфиг и манифест версии 1 на версию 2 и оставляет файлы Claude Code своими", async () => {
+      await connectClaudeOfVersion1();
+
+      const code = await runCli(["sync"], root, env);
+
+      expect({
+        code,
+        config: await schemaVersionOf(PROJECT_CONFIG_FILE),
+        agents: await projectAgents(),
+        manifest: await schemaVersionOf(MANIFEST_FILE),
+        sections: await manifestAgents(),
+        check: await runCli(["sync", "--check"], root, env),
+      }).toEqual({
+        code: 0,
+        config: 2,
+        agents: ["claude"],
+        manifest: 2,
+        sections: ["claude"],
+        check: 0,
+      });
+    });
+
+    it("называет общий манифест один раз, хотя его обновят оба агента", async () => {
+      await connectBothAgents();
+
+      const manifest = await readText(MANIFEST_FILE);
+
+      await writeFile(path.join(root, MANIFEST_FILE), JSON.stringify(JSON.parse(manifest)));
+
+      const files = await filesReportedBySyncCheck();
+
+      expect(files.updated).toEqual([MANIFEST_FILE]);
     });
 
     it("sync --diff говорит, что не тронет, по строке на агента", async () => {

@@ -367,6 +367,13 @@ export interface ErrorMessages {
   /** How to see the stack trace; `variable` is the environment variable. */
   debugHint(variable: string): string;
   initBlocked(params: { files: string; rulesFile: string }): string;
+  /** `init --agent` adds an agent to a project whose config is of another Cyberzavod version. */
+  addAgentNeedsSync(params: {
+    file: string;
+    configVersion: string;
+    cliVersion: string;
+    agent: string;
+  }): string;
   blankOption(option: string): string;
   absoluteJournal(path: string): string;
   journalIsProjectRoot(path: string): string;

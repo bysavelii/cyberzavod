@@ -440,6 +440,8 @@ export const en: CliMessages = {
     jsonNeedsPreview: `--json works only with --check or --diff: ${CLI_COMMAND} sync --check --json`,
     initBlocked: ({ files, rulesFile }) =>
       `could not initialize this project.\n\nThese files already exist and are not managed by Cyberzavod: ${files}\n\nNothing was changed.\n\nFix: move their content into ${rulesFile}, delete them, then run again:\n  ${CLI_COMMAND} init`,
+    addAgentNeedsSync: ({ file, configVersion, cliVersion, agent }) =>
+      `the agent was not added: ${file} is for Cyberzavod ${configVersion}, and this is ${cliVersion}. Nothing was changed.\n\nFix: bring the project to this version, then add the agent again:\n  ${CLI_COMMAND} sync\n  ${CLI_COMMAND} init --agent ${agent}`,
     blankOption: (option) => `${option} is empty: give a value`,
     journalIsProjectRoot: (path) =>
       `--journal ${path} is the project root: give a directory for the journal, for example .cyberzavod/journal`,

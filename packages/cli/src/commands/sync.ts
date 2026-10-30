@@ -93,13 +93,20 @@ function withLegacyTool(report: SyncReport, isLegacyToolRemoved: boolean): SyncR
     : report;
 }
 
+// The agents share files such as the manifest: each agent reports it, the human sees it once.
+function mergedFiles(reports: readonly SyncReport[], list: keyof SyncReport): string[] {
+  const files = reports.flatMap((report) => report[list]);
+
+  return [...new Set(files)];
+}
+
 function mergedReport(reports: readonly SyncReport[]): SyncReport {
   return {
-    added: reports.flatMap((report) => report.added),
-    updated: reports.flatMap((report) => report.updated),
-    removed: reports.flatMap((report) => report.removed),
-    conflicts: reports.flatMap((report) => report.conflicts),
-    edited: reports.flatMap((report) => report.edited),
+    added: mergedFiles(reports, "added"),
+    updated: mergedFiles(reports, "updated"),
+    removed: mergedFiles(reports, "removed"),
+    conflicts: mergedFiles(reports, "conflicts"),
+    edited: mergedFiles(reports, "edited"),
   };
 }
 
@@ -230,7 +237,7 @@ export async function previewProject(directory: string, options: PreviewOptions)
  * @returns {Promise<CarriedOver<SyncReport>>} What was written and the approval that moved.
  * @throws {Error} If the agent files cannot be built or the agent's own config cannot be read.
  */
-export async function syncFilesCarryingTrust(
+async function syncFilesCarryingTrust(
   adapter: AgentAdapter,
   request: FilesRequest,
 ): Promise<CarriedOver<SyncReport>> {
