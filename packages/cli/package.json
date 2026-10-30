@@ -1,6 +1,6 @@
 {
   "name": "cyberzavod",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Local-first development harness for AI coding agents: process, checks and a session journal in your repository. Agent-agnostic by design; Claude Code and Codex CLI are supported.",
   "license": "MIT",
   "author": {

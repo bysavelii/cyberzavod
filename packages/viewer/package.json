@@ -1,6 +1,6 @@
 {
   "name": "@cyberzavod/viewer",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "The Cyberzavod factory floor for your own recordings and drafts. It has no commands of its own: `npx cyberzavod view` fetches and serves it.",
   "license": "MIT",
   "author": {
