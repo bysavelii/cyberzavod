@@ -2,7 +2,7 @@
 
 Cyberzavod is a local-first development harness for AI coding agents. It does not write code and it is not an agent: it gives the agent you already use a fixed process (Plan → Code → Review → Verify → Record), checks that must be green before the agent stops, and a journal of sessions and decisions next to your project.
 
-Cyberzavod is agent-agnostic by design. Two adapters are supported: Claude Code (the default) and Codex CLI (`init --agent codex`).
+Cyberzavod is agent-agnostic by design. Two adapters are supported: Claude Code (the default) and Codex CLI (`init --agent codex`), alone or both in one project: a second `init --agent <agent>` adds the agent, `disconnect --agent <agent>` removes one. With two agents, `draft` and `publish` need `--agent`.
 
 ## Quickstart
 

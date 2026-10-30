@@ -46,7 +46,7 @@ You approve the plan. Agents write the code, review it and verify it against the
 ## Good to know
 
 - **Local-first.** Cyberzavod is local-first. Nothing is shared unless you explicitly use sharing or publishing (`/publish-recording`, `share`). `init`, `sync`, `status`, `doctor` and the hooks send nothing anywhere.
-- **Two agents.** Cyberzavod is agent-agnostic by design. Claude Code (the default) and Codex CLI (`init --agent codex`) are supported; other agents are not supported yet. A project is driven by one agent. Codex runs a project's hooks only for a project you trust, so `init` marks the project and its hooks trusted in your own Codex config, outside the project; `disconnect` takes that back.
+- **Two agents.** Cyberzavod is agent-agnostic by design. Claude Code (the default) and Codex CLI (`init --agent codex`) are supported; other agents are not supported yet. To use both in one project, run `init` once more with the other `--agent`; `disconnect --agent <agent>` removes one. Codex runs a project's hooks only for a project you trust, so `init` marks the project and its hooks trusted in your own Codex config, outside the project; `disconnect` takes that back.
 - **Your files are safe.** Cyberzavod never silently overwrites a file it does not own. Running `init` again changes nothing.
 - **Something is wrong?** Run `npx cyberzavod doctor`. It checks the setup and says how to fix each problem.
 - **Not for you?** `npx cyberzavod disconnect` shows what it will remove and what it will keep, then removes only what Cyberzavod added. Your code, `AGENTS.md` and the journal stay.

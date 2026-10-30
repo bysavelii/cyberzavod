@@ -8,7 +8,7 @@ order: 1
 
 You need Node 22+, git and Claude Code or Codex CLI. The project must be a git repository (in an empty folder run `git init`): `/feature` wants a clean working tree and makes commits.
 
-Cyberzavod is agent-agnostic by design. Two adapters are supported: Claude Code (the default) and Codex CLI (`init --agent codex`); other agents are not supported yet. A project is driven by one agent. Below, Codex differences are marked: skills are called with `$` instead of `/` (`$setup`, `$feature`, `$publish-recording`). A shorter version of this page: [Cyberzavod in 3 minutes](/guides/getting-started/).
+Cyberzavod is agent-agnostic by design. Two adapters are supported: Claude Code (the default) and Codex CLI (`init --agent codex`); other agents are not supported yet. A project can have both: a second `init --agent <agent>` adds an agent next to the first. Below, Codex differences are marked: skills are called with `$` instead of `/` (`$setup`, `$feature`, `$publish-recording`). A shorter version of this page: [Cyberzavod in 3 minutes](/guides/getting-started/).
 
 1. `npx cyberzavod init` in the project root (for Codex, `npx cyberzavod init --agent codex`). If npx asks to download the package, answer `y`. `init` shows what it found and asks `Continue? [Y/n]`, then writes the config, `AGENTS.md` and the agent files and prints what to commit. Commit those files.
 2. Open the agent in the project **after** `init` (a session started earlier is recorded without its start) and run `/setup` (in Codex, `$setup`). It fills in `AGENTS.md` from your repository, asks only what the code cannot tell, and runs the checks once (the commands that must pass before an agent can finish a turn). Commit the files it changed (it lists them).
@@ -19,7 +19,7 @@ Finished builds you can open and watch are in the examples below.
 
 ## What appears in the project
 
-- `.cyberzavod/project.json`: the project marker and config: project id, process, agent per stage, checks and the journal path. The journal is the `.cyberzavod/journal/` directory with sessions, decisions and notes as JSON files.
+- `.cyberzavod/project.json`: the project marker and config: project id, process, the connected agents with their stages, checks and the journal path. The journal is the `.cyberzavod/journal/` directory with sessions, decisions and notes as JSON files.
 - `AGENTS.md`: project rules for agents and people. A handwritten `CLAUDE.md` that was there becomes `AGENTS.md`; otherwise a starter is added for `/setup` to fill in.
 - For Claude Code, `CLAUDE.md`: a thin entry point. It is generated: don't edit it by hand.
 - For Claude Code, `.claude/agents/`: the stage agents and the recording editor.
@@ -29,7 +29,7 @@ Finished builds you can open and watch are in the examples below.
 - For Codex CLI, `.codex/agents/`: a role per stage and the recording editor.
 - For Codex CLI, `.agents/skills/`: the `$setup`, `$feature` and `$publish-recording` skills.
 - For Codex CLI, `.codex/hooks.json`: the recording and stop hooks and a guard that refuses `.env` and raw session logs. Your own hooks in this file stay as they are.
-- `.cyberzavod/generated.json`: the list of files Cyberzavod generated, with their checksums. It tells a generated file from one you edited by hand.
+- `.cyberzavod/generated.json`: the list of files Cyberzavod generated, with their checksums, a section per agent. It tells a generated file from one you edited by hand.
 - a line in `.gitignore`: the journal's `capture/` directory with raw session logs stays out of git.
 
 `--id`, `--check` and `--journal` change what `init` detected; `--yes` skips the confirmation. Details: `npx cyberzavod init --help`.
@@ -46,7 +46,7 @@ Run every command as `npx cyberzavod <command>`.
 
 **Getting started**
 
-- `init`: set up the project: config, `AGENTS.md`, agent files. `--agent claude|codex` picks the agent; the default is `claude`.
+- `init`: set up the project: config, `AGENTS.md`, agent files. `--agent claude|codex` picks the agent; the default is `claude`. In a connected project, `init --agent <other agent>` adds that agent after one confirmation and leaves the first untouched.
 - `status`: project, workflow, stage agents, checks and the journal.
 
 **Journal**
@@ -66,7 +66,7 @@ Run every command as `npx cyberzavod <command>`.
 
 - `sync`: detect the stack again and rebuild the agent files. `sync --diff` shows what it would add, update and remove, and what it will not touch, without changing anything. `sync --check` reports the same and exits with 1 if anything is out of date. `sync --force` overwrites a file you wrote or edited yourself in place of a generated one.
 - `doctor`: check the setup and say how to fix each problem.
-- `disconnect`: remove Cyberzavod from the project, see [Removing Cyberzavod](#removing-cyberzavod).
+- `disconnect`: remove Cyberzavod from the project (`--agent <agent>` removes one of several agents), see [Removing Cyberzavod](#removing-cyberzavod).
 
 For scripts and CI, `status --json`, `doctor --json`, `sync --check --json` and `sync --diff --json` print one JSON document without colors, with a `schemaVersion` and stable keys.
 
@@ -97,7 +97,7 @@ An unexpected error prints one line. To see the stack trace for a bug report, ru
 npx cyberzavod disconnect
 ```
 
-It first shows what it will remove and what it will keep, and asks `Continue? [Y/n]`. It removes only what Cyberzavod added: the generated `CLAUDE.md` files, the agents and skills in `.claude/` (for Codex, `.codex/` and `.agents/skills/`), its hooks and rules in `.claude/settings.json` (for Codex, `.codex/hooks.json`, and the trust it added in your Codex config), `.cyberzavod/generated.json` and `.cyberzavod/project.json`. It keeps your code, `AGENTS.md`, the journal, the `.gitignore` line, your own settings and hooks, and any generated file you edited by hand. Without a terminal, add `--yes`. Claude Code reads `CLAUDE.md`, so if you keep working with it, create a `CLAUDE.md` with one line, `@AGENTS.md`.
+It first shows what it will remove and what it will keep, and asks `Continue? [Y/n]`. It removes only what Cyberzavod added: the generated `CLAUDE.md` files, the agents and skills in `.claude/` (for Codex, `.codex/` and `.agents/skills/`), its hooks and rules in `.claude/settings.json` (for Codex, `.codex/hooks.json`, and the trust it added in your Codex config), `.cyberzavod/generated.json` and `.cyberzavod/project.json`. It keeps your code, `AGENTS.md`, the journal, the `.gitignore` line, your own settings and hooks, and any generated file you edited by hand. With several agents, `disconnect --agent <agent>` removes only that agent's files, hooks and trust and its part of `.cyberzavod/generated.json`, and the other agent keeps working. Without a terminal, add `--yes`. Claude Code reads `CLAUDE.md`, so if you keep working with it, create a `CLAUDE.md` with one line, `@AGENTS.md`.
 
 ## Live examples
 
@@ -158,7 +158,7 @@ Every record has the same envelope: version, type, time, project, session, sourc
 `.cyberzavod/project.json` holds:
 
 - `projectId`, the harness version, the process and the journal path;
-- `agents`: for each stage `provider`, `agent` and `model`;
+- `agents`: for each connected agent (`claude`, `codex`) its stages with `provider` and `model`;
 - `verification`: `commands` and `paths`, see "Checks" above;
 - `stack`: what `init` detected, for information only.
 
@@ -166,7 +166,7 @@ Every record has the same envelope: version, type, time, project, session, sourc
 
 `/publish-recording` walks you through the steps:
 
-1. Draft. `draft` builds it from the most recent raw session log. The draft goes to `capture/<agent>/drafts/` of the journal (`capture/claude/drafts/` or `capture/codex/drafts/`).
+1. Draft. `draft` builds it from the most recent raw session log (with two agents in the project, the skill passes `--agent`). The draft goes to `capture/<agent>/drafts/` of the journal (`capture/claude/drafts/` or `capture/codex/drafts/`).
 2. Editing. The session writes the recording title and rewrites your prompts into a clean form: the main instruction and the clarifications. The `recording-editor` agent writes the messages between the stages and to you and the human interventions, that is, the moments when the automation waited for your word.
 3. Human review. The skill shows tables of prompts, messages and interventions. Read them carefully: what you approve goes into the recording. Publishing scans the text for addresses and keys, but that is only a safety net.
 4. Publishing. `publish` checks the format and writes `sessions/<id>.json` to the project journal.
