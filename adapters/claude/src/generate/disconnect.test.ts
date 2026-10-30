@@ -91,6 +91,37 @@ describe("disconnectClaude", () => {
     });
   });
 
+  it("оставляет манифест с секцией другого агента и убирает только свою", async () => {
+    await connectedProject();
+    const manifest = JSON.parse(await readFile(path.join(root, MANIFEST_FILE), "utf8"));
+    const otherSection = { files: { "other/file.md": "sha256:other" }, settings: { deny: [] } };
+
+    await writeProjectFile(
+      MANIFEST_FILE,
+      JSON.stringify({ ...manifest, agents: { ...manifest.agents, codex: otherSection } }),
+    );
+
+    const plan = await disconnectClaude({ projectDirectory: root });
+
+    const kept = JSON.parse(await readFile(path.join(root, MANIFEST_FILE), "utf8"));
+
+    expect({ manifest: plan.manifest, agents: kept.agents }).toEqual({
+      manifest: "updated",
+      agents: { codex: otherSection },
+    });
+  });
+
+  it("удаляет манифест, когда другого агента в нём нет", async () => {
+    await connectedProject();
+
+    const plan = await disconnectClaude({ projectDirectory: root });
+
+    expect({ manifest: plan.manifest, exists: await exists(MANIFEST_FILE) }).toEqual({
+      manifest: "removed",
+      exists: false,
+    });
+  });
+
   it("в режиме проверки ничего не меняет", async () => {
     await connectedProject();
 

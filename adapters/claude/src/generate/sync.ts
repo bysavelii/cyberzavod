@@ -10,7 +10,7 @@ import {
   generatedCandidates,
   locatedFromPlanned,
   MANIFEST_FILE,
-  manifestText,
+  manifestTextWith,
   parseManifest,
   parseSettings,
   pinnedCliCommand,
@@ -24,6 +24,7 @@ import {
   type KitError,
   type LocatedProject,
   type Manifest,
+  type ManifestOwner,
   type PlannedProject,
   SettingsError,
   type Settings,
@@ -48,6 +49,20 @@ const GENERATED_DIRECTORIES = [".claude/agents", ".claude/skills"].map((director
   directory,
   extensions: [".md"],
 }));
+
+function isInGeneratedDirectory(file: string): boolean {
+  return GENERATED_DIRECTORIES.some(({ directory }) => file.startsWith(`${directory}/`));
+}
+
+function isEntrypoint(file: string): boolean {
+  return file === ENTRYPOINT_FILE || file.endsWith(`/${ENTRYPOINT_FILE}`);
+}
+
+/** The Claude Code section of the shared manifest: its files are in `.claude/` and `CLAUDE.md`. */
+export const CLAUDE_MANIFEST_OWNER: ManifestOwner = {
+  agent: CLAUDE_AGENT,
+  ownsFile: (file) => isInGeneratedDirectory(file) || isEntrypoint(file),
+};
 
 /** What to generate from: the harness and templates of the running Cyberzavod version. */
 export interface ClaudeInstallation {
@@ -139,13 +154,13 @@ function manifestOf(files: GeneratedFile[], deny: readonly string[]): Manifest {
 }
 
 /**
- * Reads the manifest of generated output from the project.
+ * Reads the Claude Code section of the manifest of generated output.
  * @param {string} root Project root.
- * @returns {Promise<Manifest>} The manifest; empty if there is no file.
+ * @returns {Promise<Manifest>} The section; empty if there is no file or no section.
  * @throws {KitError} If the manifest cannot be parsed.
  */
 export async function readManifest(root: string): Promise<Manifest> {
-  return parseManifest(await readOptional(fileAt(root, MANIFEST_FILE)));
+  return parseManifest(await readOptional(fileAt(root, MANIFEST_FILE)), CLAUDE_MANIFEST_OWNER);
 }
 
 /**
@@ -178,10 +193,12 @@ async function planSync(
   const settings = await readSettings(project.root);
   const deny = [...new Set([...manifest.deny, ...addedDeny(settings)])];
   const generated = [...claudeFiles(claudeProject), settingsFile(settings, project.config.harness)];
-  const files = [
-    ...generated,
-    { path: MANIFEST_FILE, content: manifestText(manifestOf(generated, deny)) },
-  ];
+  const manifestSource = await readOptional(fileAt(project.root, MANIFEST_FILE));
+  const manifestFile = {
+    path: MANIFEST_FILE,
+    content: manifestTextWith(manifestSource, CLAUDE_MANIFEST_OWNER, manifestOf(generated, deny)),
+  };
+  const files = [...generated, manifestFile];
 
   return planSyncFiles({
     root: project.root,

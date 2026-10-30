@@ -17,9 +17,13 @@ import {
   type Settings,
 } from "@cyberzavod/adapter-kit";
 import { HOOKS_FILE, unparsedHooks } from "./hooks-config.ts";
-import { generatedCandidatesOf, readHooksFile, readManifest } from "./sync.ts";
-
-const BOUNDARIES = [".codex", ".agents"];
+import {
+  CODEX_DIRECTORIES,
+  CODEX_MANIFEST_OWNER,
+  generatedCandidatesOf,
+  readHooksFile,
+  readManifest,
+} from "./sync.ts";
 
 function cleanedHooks(settings: Settings): Settings {
   try {
@@ -46,12 +50,24 @@ export async function disconnectCodex(options: DisconnectOptions): Promise<Disco
   const hooksSource = await readOptional(fileAt(root, HOOKS_FILE));
   const hooks = cleanedHooks(await readHooksFile(root));
   const candidates = await generatedCandidatesOf(root, manifest);
-  const files = await plannedDisconnectFiles({ root, manifest, candidates });
+  const files = await plannedDisconnectFiles({
+    root,
+    manifest,
+    owner: CODEX_MANIFEST_OWNER,
+    candidates,
+  });
   const plan: DisconnectPlan = { ...files, settings: settingsOutcomeOf(hooksSource, hooks) };
 
   if (options.check === true) return plan;
 
-  await applyDisconnect({ root, file: HOOKS_FILE, plan, settings: hooks, boundaries: BOUNDARIES });
+  await applyDisconnect({
+    root,
+    file: HOOKS_FILE,
+    plan,
+    settings: hooks,
+    owner: CODEX_MANIFEST_OWNER,
+    boundaries: CODEX_DIRECTORIES,
+  });
 
   return plan;
 }

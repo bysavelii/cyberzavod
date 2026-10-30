@@ -4,7 +4,7 @@
 
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import type { DisconnectPlan } from "@cyberzavod/adapter-kit";
+import { MANIFEST_FILE, type DisconnectPlan } from "@cyberzavod/adapter-kit";
 import { LEGACY_TOOL_FILE, MARKER_DIRECTORY, PROJECT_CONFIG_FILE } from "@cyberzavod/storage";
 import type { AgentAdapter, UserConfigChange, UserConfigPlan } from "../agents/agent-adapter.ts";
 import { adapterFor } from "../agents/host-agent.ts";
@@ -52,6 +52,10 @@ function settingsLine(
   }
 }
 
+function manifestLine(plan: DisconnectPlan): string[] {
+  return plan.manifest === "unchanged" ? [] : [MANIFEST_FILE];
+}
+
 function takenBackLine(change: UserConfigChange, messages: CliMessages): string {
   switch (change.kind) {
     case "project":
@@ -82,6 +86,7 @@ function removedLines({
 
   return [
     ...plan.removed,
+    ...manifestLine(plan),
     ...settingsLine(plan, adapter, messages),
     ...takenBack,
     ...(hasLegacy ? [LEGACY_TOOL_FILE] : []),

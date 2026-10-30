@@ -2,9 +2,15 @@
 // hand-edited file stays; only its own hooks leave the hooks file.
 
 import { rm, writeFile } from "node:fs/promises";
+import type { KitError } from "../errors.ts";
 import { fileAt, filesOnDisk, readOptional, removeEmptyParents } from "./file-plan.ts";
 import { withoutOwnHooks, type Settings, type SettingsError } from "./hook-config.ts";
-import { MANIFEST_FILE, type Manifest } from "./manifest.ts";
+import {
+  MANIFEST_FILE,
+  manifestTextWithout,
+  type Manifest,
+  type ManifestOwner,
+} from "./manifest.ts";
 
 /**
  * What happens to the agent's hooks file: there is none or the adapter is not in it
@@ -12,13 +18,21 @@ import { MANIFEST_FILE, type Manifest } from "./manifest.ts";
  */
 export type SettingsOutcome = "unchanged" | "updated" | "removed";
 
+/**
+ * What happens to the manifest: there is none or the adapter has no section in it (`unchanged`),
+ * other agents' sections remain (`updated`), nothing remains (`removed`).
+ */
+export type ManifestOutcome = "unchanged" | "updated" | "removed";
+
 /** What the adapter removes from the project: paths from the root with `/`. */
 export interface DisconnectPlan {
-  /** Generated files not touched by hand, the manifest included: they are deleted. */
+  /** Generated files not touched by hand: they are deleted. */
   removed: string[];
   /** Generated but hand-edited files: they stay. */
   edited: string[];
   settings: SettingsOutcome;
+  /** The manifest is shared by the agents: the adapter removes only its own section. */
+  manifest: ManifestOutcome;
 }
 
 /** What to disconnect and how: only view the plan or carry it out. */
@@ -75,34 +89,55 @@ export function settingsOutcomeOf(text: string | undefined, cleaned: Settings): 
   return isSame ? "unchanged" : "updated";
 }
 
+/**
+ * What happens to the manifest when the agent leaves.
+ * @param {string | undefined} previousText Manifest on disk; undefined if there is no file.
+ * @param {ManifestOwner} owner The agent that leaves.
+ * @returns {ManifestOutcome} `unchanged`, `updated` or `removed`.
+ * @throws {KitError} If the manifest cannot be parsed.
+ */
+export function manifestOutcomeOf(
+  previousText: string | undefined,
+  owner: ManifestOwner,
+): ManifestOutcome {
+  if (previousText === undefined) return "unchanged";
+
+  const remaining = manifestTextWithout(previousText, owner);
+
+  if (remaining === undefined) return "removed";
+
+  return remaining === previousText ? "unchanged" : "updated";
+}
+
 /** What the adapter's files plan to remove. */
 export interface FilesDisconnectSource {
   root: string;
   manifest: Manifest;
+  /** The agent that leaves: only its section is removed from the manifest. */
+  owner: ManifestOwner;
   /** Paths where generated files may lie, from `generatedCandidates`. */
   candidates: readonly string[];
 }
 
 /**
- * Which generated files disconnecting deletes and which it leaves as edited by hand.
- * @param {FilesDisconnectSource} source Root, manifest and candidates.
- * @returns {Promise<{ removed: string[]; edited: string[] }>} Files to delete, the manifest
- *   included, and hand-edited files.
+ * Which generated files disconnecting deletes, which it leaves as edited by hand, and what
+ * happens to the manifest.
+ * @param {FilesDisconnectSource} source Root, the agent's manifest section and candidates.
+ * @returns {Promise<Pick<DisconnectPlan, "removed" | "edited" | "manifest">>} Files to delete,
+ *   hand-edited files and the manifest outcome.
  */
 export async function plannedDisconnectFiles(
   source: FilesDisconnectSource,
-): Promise<Pick<DisconnectPlan, "removed" | "edited">> {
-  const { root, manifest, candidates } = source;
+): Promise<Pick<DisconnectPlan, "removed" | "edited" | "manifest">> {
+  const { root, manifest, owner, candidates } = source;
   const owned = await filesOnDisk(root, candidates, manifest);
   const generated = owned.filter(({ ownership }) => ownership === "generated");
-  const manifestText = await readOptional(fileAt(root, MANIFEST_FILE));
+  const manifestSource = await readOptional(fileAt(root, MANIFEST_FILE));
 
   return {
-    removed: [
-      ...generated.map((file) => file.path).sort(),
-      ...(manifestText === undefined ? [] : [MANIFEST_FILE]),
-    ],
+    removed: generated.map((file) => file.path).sort(),
     edited: owned.filter(({ ownership }) => ownership === "edited").map((file) => file.path),
+    manifest: manifestOutcomeOf(manifestSource, owner),
   };
 }
 
@@ -114,18 +149,21 @@ export interface SettingsDisconnect {
   plan: DisconnectPlan;
   /** Settings without the adapter. */
   settings: Settings;
+  /** The agent that leaves. */
+  owner: ManifestOwner;
   /** Directories the cleanup of emptied parents stays inside. */
   boundaries: readonly string[];
 }
 
 /**
  * Carries out a disconnect plan: rewrites or deletes the settings file, deletes the generated
- * files and the directories emptied by it.
- * @param {SettingsDisconnect} source Plan, settings without the adapter and the boundaries.
+ * files and the directories emptied by it, removes the agent's section from the manifest.
+ * @param {SettingsDisconnect} source Plan, settings without the adapter, the agent and the
+ *   boundaries.
  * @returns {Promise<void>} Done when everything is carried out.
  */
 export async function applyDisconnect(source: SettingsDisconnect): Promise<void> {
-  const { root, file, plan, settings, boundaries } = source;
+  const { root, file, plan, settings, owner, boundaries } = source;
   const settingsPath = fileAt(root, file);
 
   switch (plan.settings) {
@@ -147,5 +185,34 @@ export async function applyDisconnect(source: SettingsDisconnect): Promise<void>
 
     await rm(target);
     await removeEmptyParents(root, target, boundaries);
+  }
+
+  await applyManifestOutcome(root, plan.manifest, owner);
+}
+
+async function applyManifestOutcome(
+  root: string,
+  outcome: ManifestOutcome,
+  owner: ManifestOwner,
+): Promise<void> {
+  const manifestPath = fileAt(root, MANIFEST_FILE);
+
+  switch (outcome) {
+    case "unchanged":
+      break;
+
+    case "updated": {
+      const remaining = manifestTextWithout(await readOptional(manifestPath), owner);
+
+      if (remaining !== undefined) await writeFile(manifestPath, remaining);
+
+      break;
+    }
+
+    case "removed":
+      await rm(manifestPath);
+      break;
+    default:
+      return outcome satisfies never;
   }
 }

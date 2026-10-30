@@ -1,29 +1,27 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "projectId": "cyberzavod",
   "harness": "1.0.0",
   "workflow": "default",
   "journal": ".cyberzavod/journal",
   "agents": {
-    "planning": {
-      "provider": "anthropic",
-      "agent": "claude",
-      "model": "default"
-    },
-    "implementation": {
-      "provider": "anthropic",
-      "agent": "claude",
-      "model": "default"
-    },
-    "review": {
-      "provider": "anthropic",
-      "agent": "claude",
-      "model": "default"
-    },
-    "verification": {
-      "provider": "anthropic",
-      "agent": "claude",
-      "model": "default"
+    "claude": {
+      "planning": {
+        "provider": "anthropic",
+        "model": "default"
+      },
+      "implementation": {
+        "provider": "anthropic",
+        "model": "default"
+      },
+      "review": {
+        "provider": "anthropic",
+        "model": "default"
+      },
+      "verification": {
+        "provider": "anthropic",
+        "model": "default"
+      }
     }
   },
   "verification": {

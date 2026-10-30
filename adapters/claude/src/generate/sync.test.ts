@@ -207,10 +207,56 @@ describe("syncClaude", () => {
 
     expect({
       schemaVersion: manifest.schemaVersion,
-      claudeMd: typeof manifest.files["CLAUDE.md"],
-      settings: manifest.files[".claude/settings.json"],
-      deny: manifest.settings.deny.length > 0,
-    }).toEqual({ schemaVersion: 1, claudeMd: "string", settings: undefined, deny: true });
+      claudeMd: typeof manifest.agents.claude.files["CLAUDE.md"],
+      settings: manifest.agents.claude.files[".claude/settings.json"],
+      deny: manifest.agents.claude.settings.deny.length > 0,
+    }).toEqual({ schemaVersion: 2, claudeMd: "string", settings: undefined, deny: true });
+  });
+
+  it("не трогает файлы и секцию манифеста другого агента", async () => {
+    await sync();
+
+    const otherSection = {
+      files: { ".codex/config.toml": "sha256:other" },
+      settings: { deny: [] },
+    };
+    const manifestFile = path.join(root, MANIFEST_FILE);
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+
+    await writeProjectFile(
+      MANIFEST_FILE,
+      JSON.stringify({ ...manifest, agents: { ...manifest.agents, codex: otherSection } }),
+    );
+    await writeProjectFile(".codex/config.toml", `${GENERATED_MARK}\nother\n`);
+
+    const report = await sync();
+
+    const written = JSON.parse(await readFile(manifestFile, "utf8"));
+
+    expect({
+      removed: report.removed,
+      otherFile: await exists(".codex/config.toml"),
+      otherSection: written.agents.codex,
+    }).toEqual({ removed: [], otherFile: true, otherSection });
+  });
+
+  it("переводит манифест версии 1 в версию 2 с одной секцией Claude Code", async () => {
+    await sync();
+    const manifestFile = path.join(root, MANIFEST_FILE);
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+    const { files, settings } = manifest.agents.claude;
+
+    await writeProjectFile(MANIFEST_FILE, JSON.stringify({ schemaVersion: 1, files, settings }));
+
+    const report = await sync();
+
+    const written = JSON.parse(await readFile(manifestFile, "utf8"));
+
+    expect({ conflicts: report.conflicts, edited: report.edited, written }).toEqual({
+      conflicts: [],
+      edited: [],
+      written: manifest,
+    });
   });
 
   it("не перезаписывает сгенерированный файл, исправленный руками", async () => {
@@ -266,7 +312,7 @@ describe("syncClaude", () => {
 
     const manifest = JSON.parse(await readFile(path.join(root, MANIFEST_FILE), "utf8"));
 
-    expect(manifest.settings.deny).not.toContain("Read(**/.env)");
+    expect(manifest.agents.claude.settings.deny).not.toContain("Read(**/.env)");
   });
 });
 

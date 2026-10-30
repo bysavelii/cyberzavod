@@ -73,6 +73,37 @@ describe("disconnectCodex", () => {
     expect(await exists("AGENTS.md")).toBe(true);
   });
 
+  it("оставляет манифест с секцией другого агента и убирает только свою", async () => {
+    await connectedProject();
+    const manifest = JSON.parse(await readFile(path.join(root, MANIFEST_FILE), "utf8"));
+    const otherSection = { files: { "other/file.md": "sha256:other" }, settings: { deny: [] } };
+
+    await writeProjectFile(
+      MANIFEST_FILE,
+      JSON.stringify({ ...manifest, agents: { ...manifest.agents, claude: otherSection } }),
+    );
+
+    const plan = await disconnectCodex({ projectDirectory: root });
+
+    const kept = JSON.parse(await readFile(path.join(root, MANIFEST_FILE), "utf8"));
+
+    expect({ manifest: plan.manifest, agents: kept.agents }).toEqual({
+      manifest: "updated",
+      agents: { claude: otherSection },
+    });
+  });
+
+  it("удаляет манифест, когда другого агента в нём нет", async () => {
+    await connectedProject();
+
+    const plan = await disconnectCodex({ projectDirectory: root });
+
+    expect({ manifest: plan.manifest, exists: await exists(MANIFEST_FILE) }).toEqual({
+      manifest: "removed",
+      exists: false,
+    });
+  });
+
   it("в режиме проверки только называет, что уберёт", async () => {
     await connectedProject();
 

@@ -10,7 +10,7 @@ import {
   generatedCandidates,
   locatedFromPlanned,
   MANIFEST_FILE,
-  manifestText,
+  manifestTextWith,
   parseManifest,
   parseSettings,
   pinnedCliCommand,
@@ -25,6 +25,7 @@ import {
   type KitError,
   type LocatedProject,
   type Manifest,
+  type ManifestOwner,
   type PlannedProject,
   type Settings,
   type SyncPlan,
@@ -35,6 +36,15 @@ import { workflowOf } from "@cyberzavod/storage";
 import { CODEX_AGENT, type CodexGenerateError } from "./codex.ts";
 import { CONFIG_FILE, codexFiles, type CodexProject, type CodexTemplates } from "./files.ts";
 import { codexHooks, HOOKS_FILE, mergeHooksFile, unparsedHooks } from "./hooks-config.ts";
+
+/** Directories of the project that hold only Codex files; cleanup of emptied parents stays in them. */
+export const CODEX_DIRECTORIES: readonly string[] = [".codex", ".agents"];
+
+/** The Codex section of the shared manifest: its files are in `.codex/` and `.agents/`. */
+export const CODEX_MANIFEST_OWNER: ManifestOwner = {
+  agent: CODEX_AGENT,
+  ownsFile: (file) => CODEX_DIRECTORIES.some((directory) => file.startsWith(`${directory}/`)),
+};
 
 const GENERATED_DIRECTORIES: readonly CandidateSource[] = [
   { directory: ".codex/agents", extensions: [".toml"] },
@@ -90,13 +100,13 @@ export async function readHooksFile(root: string): Promise<Settings> {
 }
 
 /**
- * Reads the manifest of generated output from the project.
+ * Reads the Codex section of the manifest of generated output.
  * @param {string} root Project root.
- * @returns {Promise<Manifest>} The manifest; empty if there is no file.
+ * @returns {Promise<Manifest>} The section; empty if there is no file or no section.
  * @throws {KitError} If the manifest cannot be parsed.
  */
 export async function readManifest(root: string): Promise<Manifest> {
-  return parseManifest(await readOptional(fileAt(root, MANIFEST_FILE)));
+  return parseManifest(await readOptional(fileAt(root, MANIFEST_FILE)), CODEX_MANIFEST_OWNER);
 }
 
 /**
@@ -144,10 +154,12 @@ async function planSync(
     content: hooksFileText(await readHooksFile(project.root), project.config.harness),
   };
   const generated = [...codexFiles(codexProjectOf(project, installation)), hooksFile];
-  const files = [
-    ...generated,
-    { path: MANIFEST_FILE, content: manifestText(manifestOf(generated)) },
-  ];
+  const manifestSource = await readOptional(fileAt(project.root, MANIFEST_FILE));
+  const manifestFile = {
+    path: MANIFEST_FILE,
+    content: manifestTextWith(manifestSource, CODEX_MANIFEST_OWNER, manifestOf(generated)),
+  };
+  const files = [...generated, manifestFile];
 
   return planSyncFiles({
     root: project.root,

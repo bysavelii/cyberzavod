@@ -107,12 +107,14 @@ export { isObject, stringField } from "./object.ts";
 export {
   applyDisconnect,
   isEmptySettings,
+  manifestOutcomeOf,
   plannedDisconnectFiles,
   settingsOutcomeOf,
   settingsText,
   withoutAdapterHooks,
   type DisconnectOptions,
   type DisconnectPlan,
+  type ManifestOutcome,
   type FilesDisconnectSource,
   type SettingsDisconnect,
   type SettingsOutcome,
@@ -166,9 +168,11 @@ export {
   contentHash,
   EMPTY_MANIFEST,
   MANIFEST_FILE,
-  manifestText,
+  manifestTextWith,
+  manifestTextWithout,
   parseManifest,
   type Manifest,
+  type ManifestOwner,
 } from "./generate/manifest.ts";
 export {
   GENERATED_MARK,

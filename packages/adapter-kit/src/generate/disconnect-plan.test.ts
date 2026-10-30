@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyDisconnect,
   isEmptySettings,
+  manifestOutcomeOf,
   plannedDisconnectFiles,
   settingsOutcomeOf,
   settingsText,
@@ -12,13 +13,16 @@ import {
   type DisconnectPlan,
 } from "./disconnect-plan.ts";
 import { hookCommand } from "./hook-config.ts";
-import { contentHash, MANIFEST_FILE } from "./manifest.ts";
+import { contentHash, MANIFEST_FILE, manifestTextWith, type ManifestOwner } from "./manifest.ts";
 
 const OWN = {
   type: "command",
   command: hookCommand({ runner: "npx -y", version: "1", hook: "stop", onFailure: "true" }),
 };
 const HUMAN = { type: "command", command: "echo mine" };
+
+const OWNER: ManifestOwner = { agent: "alpha", ownsFile: (file) => file.endsWith(".md") };
+const OTHER_OWNER: ManifestOwner = { agent: "beta", ownsFile: () => false };
 
 let root: string;
 
@@ -75,6 +79,24 @@ describe("settingsOutcomeOf", () => {
   });
 });
 
+describe("manifestOutcomeOf", () => {
+  const alpha = manifestTextWith(undefined, OWNER, { files: { "a.md": "sha256:1" }, deny: [] });
+  const both = manifestTextWith(alpha, OTHER_OWNER, { files: {}, deny: [] });
+
+  it.each([
+    ["нет манифеста", undefined, "unchanged"],
+    ["своя секция единственная", alpha, "removed"],
+    ["остались секции других агентов", both, "updated"],
+    ["манифест версии 1", JSON.stringify({ schemaVersion: 1, files: {} }), "removed"],
+  ] as const)("при %s даёт %s", (_name, text, expected) => {
+    expect(manifestOutcomeOf(text, OWNER)).toBe(expected);
+  });
+
+  it("не трогает манифест, в котором нет секции агента", () => {
+    expect(manifestOutcomeOf(both, { agent: "gamma", ownsFile: () => false })).toBe("unchanged");
+  });
+});
+
 describe("файлы на диске", () => {
   beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), "cyberzavod-kit-disconnect-"));
@@ -85,10 +107,13 @@ describe("файлы на диске", () => {
   });
 
   describe("plannedDisconnectFiles", () => {
-    it("удаляет нетронутые файлы вместе с манифестом и оставляет исправленные", async () => {
+    it("удаляет нетронутые файлы и оставляет исправленные, манифест называет отдельно", async () => {
       await write("a.md", "a");
       await write("b.md", "changed");
-      await write(MANIFEST_FILE, "{}");
+      await write(
+        MANIFEST_FILE,
+        manifestTextWith(undefined, OWNER, { files: { "a.md": contentHash("a") }, deny: [] }),
+      );
 
       const manifest = {
         files: { "a.md": contentHash("a"), "b.md": contentHash("original") },
@@ -98,16 +123,21 @@ describe("файлы на диске", () => {
       const plan = await plannedDisconnectFiles({
         root,
         manifest,
+        owner: OWNER,
         candidates: ["a.md", "b.md", "gone.md"],
       });
 
-      expect(plan).toEqual({ removed: ["a.md", MANIFEST_FILE], edited: ["b.md"] });
+      expect(plan).toEqual({ removed: ["a.md"], edited: ["b.md"], manifest: "removed" });
     });
   });
 
   describe("applyDisconnect", () => {
-    function planOf(settings: DisconnectPlan["settings"], removed: string[]): DisconnectPlan {
-      return { removed, edited: [], settings };
+    function planOf(
+      settings: DisconnectPlan["settings"],
+      removed: string[],
+      manifest: DisconnectPlan["manifest"] = "unchanged",
+    ): DisconnectPlan {
+      return { removed, edited: [], settings, manifest };
     }
 
     it("переписывает файл настроек, если остался чужой текст", async () => {
@@ -118,6 +148,7 @@ describe("файлы на диске", () => {
         file: ".agent/hooks.json",
         plan: planOf("updated", []),
         settings: { description: "mine" },
+        owner: OWNER,
         boundaries: [".agent"],
       });
 
@@ -135,6 +166,7 @@ describe("файлы на диске", () => {
         file: ".agent/hooks.json",
         plan: planOf("removed", [".agent/roles/a.toml"]),
         settings: {},
+        owner: OWNER,
         boundaries: [".agent"],
       });
 
@@ -149,10 +181,45 @@ describe("файлы на диске", () => {
         file: ".agent/hooks.json",
         plan: planOf("unchanged", []),
         settings: {},
+        owner: OWNER,
         boundaries: [".agent"],
       });
 
       expect(await readFile(path.join(root, ".agent/hooks.json"), "utf8")).toBe("same");
+    });
+
+    it("удаляет манифест, когда секций не осталось", async () => {
+      await write(MANIFEST_FILE, manifestTextWith(undefined, OWNER, { files: {}, deny: [] }));
+
+      await applyDisconnect({
+        root,
+        file: ".agent/hooks.json",
+        plan: planOf("unchanged", [], "removed"),
+        settings: {},
+        owner: OWNER,
+        boundaries: [".agent"],
+      });
+
+      expect(await exists(MANIFEST_FILE)).toBe(false);
+    });
+
+    it("переписывает манифест без своей секции, когда остались чужие", async () => {
+      const alpha = manifestTextWith(undefined, OWNER, { files: {}, deny: [] });
+
+      await write(MANIFEST_FILE, manifestTextWith(alpha, OTHER_OWNER, { files: {}, deny: ["x"] }));
+
+      await applyDisconnect({
+        root,
+        file: ".agent/hooks.json",
+        plan: planOf("unchanged", [], "updated"),
+        settings: {},
+        owner: OWNER,
+        boundaries: [".agent"],
+      });
+
+      const text = await readFile(path.join(root, MANIFEST_FILE), "utf8");
+
+      expect(Object.keys(JSON.parse(text).agents)).toEqual(["beta"]);
     });
   });
 });

@@ -16,7 +16,12 @@ import {
   type Settings,
 } from "@cyberzavod/adapter-kit";
 import { SETTINGS_FILE, unparsedSettings, withoutAdapterSettings } from "./settings.ts";
-import { generatedCandidatesOf, readManifest, readSettings } from "./sync.ts";
+import {
+  CLAUDE_MANIFEST_OWNER,
+  generatedCandidatesOf,
+  readManifest,
+  readSettings,
+} from "./sync.ts";
 
 const CLAUDE_DIRECTORY = ".claude";
 
@@ -45,7 +50,12 @@ export async function disconnectClaude(options: DisconnectOptions): Promise<Disc
   const settingsSource = await readOptional(fileAt(root, SETTINGS_FILE));
   const settings = cleanedSettings(await readSettings(root), manifest.deny);
   const candidates = await generatedCandidatesOf(project, manifest);
-  const files = await plannedDisconnectFiles({ root, manifest, candidates });
+  const files = await plannedDisconnectFiles({
+    root,
+    manifest,
+    owner: CLAUDE_MANIFEST_OWNER,
+    candidates,
+  });
   const plan: DisconnectPlan = {
     ...files,
     settings: settingsOutcomeOf(settingsSource, settings),
@@ -58,6 +68,7 @@ export async function disconnectClaude(options: DisconnectOptions): Promise<Disc
     file: SETTINGS_FILE,
     plan,
     settings,
+    owner: CLAUDE_MANIFEST_OWNER,
     boundaries: [CLAUDE_DIRECTORY],
   });
 

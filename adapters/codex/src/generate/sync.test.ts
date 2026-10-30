@@ -159,8 +159,34 @@ describe("syncCodex", () => {
 
     const manifest = JSON.parse(await readProjectFile(MANIFEST_FILE));
 
-    expect(manifest.files[HOOKS_FILE]).toBeUndefined();
-    expect(typeof manifest.files[".codex/config.toml"]).toBe("string");
+    expect(manifest.agents.codex.files[HOOKS_FILE]).toBeUndefined();
+    expect(typeof manifest.agents.codex.files[".codex/config.toml"]).toBe("string");
+  });
+
+  it("не трогает файлы и секцию манифеста другого агента", async () => {
+    await sync();
+
+    const otherSection = {
+      files: { ".claude/agents/a.md": "sha256:other" },
+      settings: { deny: [] },
+    };
+    const manifest = JSON.parse(await readProjectFile(MANIFEST_FILE));
+
+    await writeProjectFile(
+      MANIFEST_FILE,
+      JSON.stringify({ ...manifest, agents: { claude: otherSection, ...manifest.agents } }),
+    );
+    await writeProjectFile("CLAUDE.md", `${GENERATED_MARK}\nother\n`);
+
+    const report = await sync();
+
+    const written = JSON.parse(await readProjectFile(MANIFEST_FILE));
+
+    expect({
+      removed: report.removed,
+      otherFile: await readProjectFile("CLAUDE.md"),
+      otherSection: written.agents.claude,
+    }).toEqual({ removed: [], otherFile: `${GENERATED_MARK}\nother\n`, otherSection });
   });
 
   it("на hooks не того вида бросает ошибку с путём файла хуков", async () => {
