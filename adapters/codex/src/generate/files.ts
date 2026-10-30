@@ -75,11 +75,12 @@ const RECORDING_EDITOR_DESCRIPTION =
   "Fills in, for the messages and human interventions in a recording draft, the line above the speaker and the full text. Editing for $publish-recording; the human's prompts and the title are edited by the session itself.";
 
 // What the shared recording texts say differently in Codex: the skill call, where the skill lives,
-// and the human's words that become interventions.
+// the human's words that become interventions, and the flag that names the agent.
 const RECORDING_TERMS: RecordingTerms = {
   feature: "$feature",
   publishSkill: `${SKILLS_DIRECTORY}/${RECORDING_SKILL}/SKILL.md`,
   interventionWords: "the human's words after the automation stops",
+  agentFlag: `--agent ${CODEX_AGENT}`,
 };
 
 const SKILL_POLICY = "policy:\n  allow_implicit_invocation: false";

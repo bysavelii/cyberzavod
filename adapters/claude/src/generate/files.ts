@@ -59,12 +59,13 @@ export interface ClaudeProject {
 }
 
 // What the shared recording texts say differently in Claude Code: the skill call, where the skill
-// lives, and the human's words that become interventions.
+// lives, the human's words that become interventions, and the flag that names the agent.
 const RECORDING_TERMS: RecordingTerms = {
   feature: "/feature",
   publishSkill: ".claude/skills/publish-recording/SKILL.md",
   interventionWords:
     "an answer to a question through `AskUserQuestion` and the human's word after the automation stops",
+  agentFlag: `--agent ${CLAUDE_AGENT}`,
 };
 
 const RULES_FILE = "AGENTS.md";

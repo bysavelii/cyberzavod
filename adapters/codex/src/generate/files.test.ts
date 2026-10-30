@@ -92,6 +92,15 @@ describe("codexFiles: запись сессии", () => {
     expect(skill).toContain("the human's words after the automation stops remain interventions");
   });
 
+  it("называет агента в командах черновика и публикации", async () => {
+    const project = { ...codexProject(), templates: await realTemplates() };
+
+    const skill = fileOf(project, ".agents/skills/publish-recording/SKILL.md");
+
+    expect(skill).toContain("`npx cyberzavod@0.3.0 draft --agent codex`");
+    expect(skill).toContain("`npx cyberzavod@0.3.0 publish --agent codex`");
+  });
+
   it("отсылает редактора к скиллу записи Codex и к черновикам журнала", async () => {
     const project = { ...codexProject(), templates: await realTemplates() };
 

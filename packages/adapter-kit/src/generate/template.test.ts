@@ -62,7 +62,12 @@ function recordingSource(rules: string, editor: string): RecordingTemplateSource
     cli: "npx cyberzavod",
     capture: { raw: "r", drafts: "d" },
     fragments: { rules, editor },
-    terms: { feature: "$feature", publishSkill: "skills/p.md", interventionWords: "his words" },
+    terms: {
+      feature: "$feature",
+      publishSkill: "skills/p.md",
+      interventionWords: "his words",
+      agentFlag: "--agent mock",
+    },
   };
 }
 
@@ -79,6 +84,14 @@ describe("recordingTemplateValues", () => {
       "run `$feature` via npx cyberzavod: his words",
       "skills/p.md in d",
     ]);
+  });
+
+  it("подставляет флаг агента в общие фрагменты", () => {
+    const source = recordingSource("{{cli}} draft {{agentFlag}}", "");
+
+    const values = recordingTemplateValues(source);
+
+    expect(values.recordingRules).toBe("npx cyberzavod draft --agent mock");
   });
 
   it("сохраняет значения обычных подстановок и слова агента", () => {

@@ -66,6 +66,8 @@ export interface RecordingTerms {
   publishSkill: string;
   /** The human's words that become interventions, `{{interventionWords}}`. */
   interventionWords: string;
+  /** The flag that names the agent for `draft` and `publish`, `{{agentFlag}}`: `--agent <name>`. */
+  agentFlag: string;
 }
 
 /** What the placeholders of the recording templates are filled with. */

@@ -205,6 +205,15 @@ describe("claudeFiles: запись сессии", () => {
     );
   });
 
+  it("называет агента в командах черновика и публикации", async () => {
+    const project = { ...claudeProject(), templates: await realTemplates() };
+
+    const skill = fileOf(project, ".claude/skills/publish-recording/SKILL.md");
+
+    expect(skill).toContain("`cyberzavod draft --agent claude`");
+    expect(skill).toContain("`cyberzavod publish --agent claude`");
+  });
+
   it("отсылает редактора к скиллу записи Claude Code и к черновикам журнала", async () => {
     const project = { ...claudeProject(), templates: await realTemplates() };
 
