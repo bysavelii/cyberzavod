@@ -299,7 +299,8 @@ function requireCurrentHarness(config: ProjectConfig, adapter: AgentAdapter): vo
 }
 
 // The config goes first, as in sync: the generator reads the agent's stages from it. If the
-// agent's files fail, the config goes back to its previous text.
+// agent's files fail, only the config goes back to its previous text: files already written stay
+// and are the agent's own by the manifest, so a repeated init --agent picks them up.
 async function syncFilesOfAddedAgent(
   root: string,
   config: ProjectConfig,
@@ -314,7 +315,8 @@ async function syncFilesOfAddedAgent(
   try {
     return await adapter.syncFiles({ projectDirectory: root, installation, force: false });
   } catch (err) {
-    await writeFile(configFile, previousConfigText);
+    // The failure of the files is the cause the human needs, even if the rollback fails too.
+    await writeFile(configFile, previousConfigText).catch(() => undefined);
 
     throw err;
   }
@@ -400,8 +402,8 @@ async function reportConnected(
  * @param {InitOptions} options Confirmation, flags, Cyberzavod version, messages.
  * @returns {Promise<boolean>} true if the project is connected and its files are current, or the
  *   human refused; false if the connected project needs sync.
- * @throws {CommandError} If a flag is invalid or the human's files block connecting: then
- *   nothing is written.
+ * @throws {CommandError} If a flag is invalid, the human's files block connecting, or an agent
+ *   is added to a project of another harness version: then nothing is written.
  * @throws {Error} If the agent's own config cannot be edited: then nothing is written.
  */
 export async function initProject(root: string, options: InitOptions): Promise<boolean> {
